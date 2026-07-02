@@ -1,0 +1,761 @@
+"""
+narratif.py
+===========
+Extension de beau_graphique.py pour les graphiques d'analyse et de présentation
+de résultats — basée sur les principes de communication visuelle :
+
+    • Hiérarchie visuelle    → ce qui compte ressort immédiatement
+    • Contraste & opacité    → gris pour le contexte, couleur pour le signal
+    • Gammes de gris         → neutraliser le bruit, focaliser l'attention
+    • Couleur d'accent       → une seule couleur forte = un seul message
+    • Typographie narrative  → titre = affirmation, pas étiquette
+    • Annotations dirigées   → flèches, zones, seuils qui "parlent"
+
+Usage
+-----
+    from narratif import (
+        barres_focus, ligne_focus, comparaison_avant_apres,
+        barres_ranked, bullet_chart, divergent,
+        annoter_zone, annoter_seuil, annoter_delta,
+        palette_focus
+    )
+
+Chaque fonction accepte les mêmes kwargs de base (titre, sous_titre, note, figsize)
+et ajoute des paramètres narratifs spécifiques.
+"""
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.patheffects as pe
+import numpy as np
+import os
+
+# ── Couleurs système ──────────────────────────────────────────────────────────
+BG          = "#F7F8FC"        # fond global
+GRIS_FORT   = "#6B6F85"        # texte secondaire, axes
+GRIS_MOY    = "#A8ABBC"        # lignes de contexte, séries non-focus
+GRIS_CLAIR  = "#D8DAE8"        # fonds de zone, grille
+TEXTE       = "#1A1C2E"        # texte principal
+TEXTE_DOUX  = "#4A4D6A"        # annotations subtiles
+
+# Accents disponibles — à choisir selon le message
+ACCENTS = {
+    "bleu"    : "#4361EE",
+    "rouge"   : "#E63946",
+    "vert"    : "#2DC653",
+    "orange"  : "#F3722C",
+    "violet"  : "#7209B7",
+    "rose"    : "#F72585",
+    "cyan"    : "#4CC9F0",
+    "or"      : "#F4A261",
+}
+
+ACCENT_DEFAUT = ACCENTS["bleu"]
+
+_STYLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beau_graphique.mplstyle")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Utilitaires internes
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _init_ax(figsize):
+    fig, ax = plt.subplots(figsize=figsize or (11, 5.5))
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(GRIS_CLAIR)
+    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.tick_params(colors=GRIS_FORT, length=0)
+    ax.grid(axis="y", color=GRIS_CLAIR, linewidth=0.7, linestyle="--", alpha=0.8)
+    return fig, ax
+
+
+def _header(fig, ax, titre, sous_titre, note):
+    """Titre affirmatif + sous-titre descriptif + note de source."""
+    if titre:
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=TEXTE,
+                     pad=12, loc="left")
+    if sous_titre:
+        # sous-titre positionné juste sous le titre, en gris doux
+        ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
+                    xytext=(0, 28), textcoords="offset points",
+                    fontsize=10, color=GRIS_FORT, annotation_clip=False)
+    if note:
+        fig.text(0.01, 0.01, note, fontsize=8, color=GRIS_MOY,
+                 style="italic", transform=fig.transFigure)
+
+
+def _finalize(fig):
+    fig.tight_layout()
+    return fig
+
+
+def palette_focus(n_total, indices_focus, accent=ACCENT_DEFAUT):
+    """
+    Génère une liste de couleurs où seules les barres/séries `indices_focus`
+    reçoivent la couleur accent — les autres tombent en gris.
+
+    Parameters
+    ----------
+    n_total       : nombre total d'éléments
+    indices_focus : int ou liste d'ints — positions à mettre en accent
+    accent        : couleur hex de l'accent
+
+    Exemple
+    -------
+    >>> colors = palette_focus(6, [2, 4], accent=ACCENTS["rouge"])
+    # → [GRIS, GRIS, ROUGE, GRIS, ROUGE, GRIS]
+    """
+    if isinstance(indices_focus, int):
+        indices_focus = [indices_focus]
+    return [accent if i in indices_focus else GRIS_MOY for i in range(n_total)]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ① barres_focus — "une barre ressort, les autres s'effacent"
+# ══════════════════════════════════════════════════════════════════════════════
+
+def barres_focus(categories, valeurs, focus,
+                 titre="", sous_titre="", note="",
+                 accent=ACCENT_DEFAUT, horizontal=False,
+                 fmt="{:.0f}", figsize=None):
+    """
+    Barres en gris neutre sauf les éléments en `focus` qui reçoivent la couleur
+    d'accent. Le regard va directement là où l'analyse veut l'emmener.
+
+    Parameters
+    ----------
+    categories : liste de str
+    valeurs    : liste de float
+    focus      : int ou liste d'ints — index des barres à mettre en valeur
+    accent     : couleur d'accent (défaut bleu)
+    horizontal : True → barres horizontales
+    fmt        : format des étiquettes de valeur (ex: "{:.1f}%", "{:,.0f}")
+
+    Exemple
+    -------
+    >>> barres_focus(
+    ...     categories=["Jan","Fév","Mar","Avr","Mai","Jun"],
+    ...     valeurs=[42, 38, 71, 55, 49, 63],
+    ...     focus=2,   # ← Mars est notre point d'analyse
+    ...     titre="Mars affiche le pic de trimestre (+87 % vs Fév)",
+    ...     sous_titre="Ventes mensuelles · Produit A · S1 2024",
+    ...     accent=ACCENTS["rouge"]
+    ... )
+    """
+    fig, ax = _init_ax(figsize)
+    colors = palette_focus(len(categories), focus, accent)
+    alphas = [1.0 if c == accent else 0.45 for c in colors]
+
+    if isinstance(focus, int):
+        focus = [focus]
+
+    if horizontal:
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_color(GRIS_CLAIR)
+        ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+        ax.grid(axis="y", visible=False)
+        for i, (cat, val, col, alpha) in enumerate(zip(categories, valeurs, colors, alphas)):
+            ax.barh(cat, val, color=col, alpha=alpha, height=0.55)
+            lw = 2.5 if i in focus else 0
+            weight = "bold" if i in focus else "normal"
+            size = 10.5 if i in focus else 9
+            fc = TEXTE if i in focus else GRIS_FORT
+            ax.text(val + max(valeurs) * 0.01, i,
+                    fmt.format(val), va="center", ha="left",
+                    fontsize=size, fontweight=weight, color=fc)
+        ax.set_xlim(0, max(valeurs) * 1.18)
+        ax.xaxis.set_visible(False)
+        ax.invert_yaxis()
+        # Étiquettes Y — focus en gras foncé
+        for i, (label, ytick) in enumerate(zip(categories, ax.get_yticklabels())):
+            pass
+        labels_y = ax.get_yticklabels()
+        for i, lbl in enumerate(ax.yaxis.get_ticklabels()):
+            if i in focus:
+                lbl.set_fontweight("bold")
+                lbl.set_color(TEXTE)
+            else:
+                lbl.set_color(GRIS_FORT)
+    else:
+        for i, (cat, val, col, alpha) in enumerate(zip(categories, valeurs, colors, alphas)):
+            ax.bar(i, val, color=col, alpha=alpha, width=0.55)
+            weight = "bold" if i in focus else "normal"
+            size = 10.5 if i in focus else 9
+            fc = TEXTE if i in focus else GRIS_FORT
+            ax.text(i, val + max(valeurs) * 0.012,
+                    fmt.format(val), ha="center", va="bottom",
+                    fontsize=size, fontweight=weight, color=fc)
+        ax.set_xticks(range(len(categories)))
+        ax.set_xticklabels(categories)
+        for i, lbl in enumerate(ax.xaxis.get_ticklabels()):
+            if i in focus:
+                lbl.set_fontweight("bold")
+                lbl.set_color(TEXTE)
+            else:
+                lbl.set_color(GRIS_FORT)
+        ax.set_ylim(0, max(valeurs) * 1.2)
+        ax.yaxis.set_visible(False)
+        ax.spines["left"].set_visible(False)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ② ligne_focus — "une courbe ressort, les autres sont le contexte"
+# ══════════════════════════════════════════════════════════════════════════════
+
+def ligne_focus(x, series: dict, focus_serie,
+                titre="", sous_titre="", note="",
+                accent=ACCENT_DEFAUT, markers=True,
+                annoter_fin=True, figsize=None):
+    """
+    Graphique multi-lignes où une série est mise en avant (couleur + épaisseur),
+    les autres passent en gris semi-transparent — elles donnent le contexte
+    sans voler l'attention.
+
+    Parameters
+    ----------
+    series      : dict {"Nom": [valeurs], ...}
+    focus_serie : str — clé de la série à mettre en accent
+    annoter_fin : annoter la valeur finale de chaque série
+
+    Exemple
+    -------
+    >>> ligne_focus(
+    ...     x=annees,
+    ...     series={"France": [...], "Allemagne": [...], "Cameroun": [...]},
+    ...     focus_serie="Cameroun",
+    ...     titre="Le Cameroun dépasse l'Allemagne en 2023",
+    ...     accent=ACCENTS["vert"]
+    ... )
+    """
+    fig, ax = _init_ax(figsize)
+    ax.grid(axis="y", color=GRIS_CLAIR, lw=0.6, ls="--", alpha=0.7)
+
+    x_arr = list(range(len(x))) if not isinstance(x[0], (int, float)) else x
+    x_labels = x if not isinstance(x[0], (int, float)) else None
+
+    # Passe 1 : séries contexte (gris, fines, semi-transparentes)
+    for nom, vals in series.items():
+        if nom == focus_serie:
+            continue
+        ax.plot(x_arr, vals, color=GRIS_MOY, lw=1.4, alpha=0.55,
+                marker=("o" if markers else None),
+                mfc=BG, mec=GRIS_MOY, mew=1.2, ms=4, zorder=2)
+        if annoter_fin:
+            ax.annotate(nom, xy=(x_arr[-1], vals[-1]),
+                        xytext=(5, 0), textcoords="offset points",
+                        fontsize=8.5, color=GRIS_FORT, va="center")
+
+    # Passe 2 : série focus (couleur accent, épaisse, zorder élevé)
+    vals_focus = series[focus_serie]
+    ax.plot(x_arr, vals_focus, color=accent, lw=3.0, zorder=4,
+            marker=("o" if markers else None),
+            mfc=BG, mec=accent, mew=2.2, ms=7)
+    if annoter_fin:
+        ax.annotate(focus_serie, xy=(x_arr[-1], vals_focus[-1]),
+                    xytext=(7, 0), textcoords="offset points",
+                    fontsize=10.5, color=accent, fontweight="bold", va="center")
+
+    if x_labels:
+        ax.set_xticks(x_arr)
+        ax.set_xticklabels(x_labels, color=GRIS_FORT)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ③ comparaison_avant_apres — contraste temporel clair
+# ══════════════════════════════════════════════════════════════════════════════
+
+def comparaison_avant_apres(categories, avant, apres,
+                            label_avant="Avant", label_apres="Après",
+                            titre="", sous_titre="", note="",
+                            accent=ACCENT_DEFAUT, figsize=None):
+    """
+    Barres doubles "Avant / Après" avec :
+    - L'avant en gris neutre
+    - L'après en accent
+    - Delta (+/−) annoté sur chaque paire
+    - Code couleur rouge/vert selon la direction du changement
+
+    Exemple
+    -------
+    >>> comparaison_avant_apres(
+    ...     categories=["Conversion", "Panier moyen", "Rétention"],
+    ...     avant=[3.2, 42, 68],
+    ...     apres=[4.7, 55, 81],
+    ...     titre="La refonte UI améliore les 3 KPIs clés",
+    ...     label_avant="Avant refonte", label_apres="Après refonte"
+    ... )
+    """
+    fig, ax = _init_ax(figsize)
+    n = len(categories)
+    x = np.arange(n)
+    w = 0.32
+
+    # Avant = gris
+    ax.bar(x - w/2, avant, width=w, color=GRIS_MOY, alpha=0.6, label=label_avant)
+    # Après = accent
+    ax.bar(x + w/2, apres, width=w, color=accent, alpha=0.9, label=label_apres)
+
+    ymax = max(max(avant), max(apres))
+
+    # Étiquettes et deltas
+    for i, (a, b) in enumerate(zip(avant, apres)):
+        # valeur avant
+        ax.text(i - w/2, a + ymax*0.01, f"{a}", ha="center", va="bottom",
+                fontsize=9, color=GRIS_FORT)
+        # valeur après
+        ax.text(i + w/2, b + ymax*0.01, f"{b}", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color=TEXTE)
+        # delta
+        delta = b - a
+        pct   = (delta / a * 100) if a != 0 else 0
+        sign  = "+" if delta >= 0 else ""
+        color_delta = ACCENTS["vert"] if delta >= 0 else ACCENTS["rouge"]
+        ax.text(i, max(a, b) + ymax*0.085,
+                f"{sign}{pct:.0f}%", ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color=color_delta)
+        # petite flèche montante / descendante
+        arrow = "▲" if delta >= 0 else "▼"
+        ax.text(i, max(a, b) + ymax*0.055, arrow,
+                ha="center", va="bottom", fontsize=9, color=color_delta)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, color=TEXTE_DOUX, fontsize=10)
+    ax.set_ylim(0, ymax * 1.28)
+    ax.yaxis.set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.legend(frameon=False, fontsize=9.5, loc="upper left",
+              labelcolor=GRIS_FORT)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ④ barres_ranked — classement avec hiérarchie visuelle par rang
+# ══════════════════════════════════════════════════════════════════════════════
+
+def barres_ranked(categories, valeurs,
+                  titre="", sous_titre="", note="",
+                  accent=ACCENT_DEFAUT, top_n=3,
+                  fmt="{:.0f}", figsize=None):
+    """
+    Classement horizontal trié — le Top N reçoit l'accent, le reste s'efface
+    progressivement via l'opacité (hiérarchie par rang).
+
+    Parameters
+    ----------
+    top_n : combien d'éléments reçoivent la couleur accent (les autres = gris dégradé)
+
+    Exemple
+    -------
+    >>> barres_ranked(
+    ...     categories=pays, valeurs=scores,
+    ...     titre="Top 3 des marchés les plus performants",
+    ...     top_n=3, accent=ACCENTS["or"]
+    ... )
+    """
+    # Tri décroissant
+    order = np.argsort(valeurs)[::-1]
+    cats_s  = [categories[i] for i in order]
+    vals_s  = [valeurs[i]    for i in order]
+    n       = len(vals_s)
+
+    fig, ax = _init_ax(figsize or (10, max(4, n * 0.55)))
+    ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+    ax.grid(axis="y", visible=False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.xaxis.set_visible(False)
+
+    for i, (cat, val) in enumerate(zip(cats_s, vals_s)):
+        if i < top_n:
+            color = accent
+            alpha = 1.0 - i * 0.12            # dégradé subtil même dans le top
+            fw    = "bold"
+            fsize = 10.5
+            fc    = TEXTE
+        else:
+            # Gris de plus en plus clair selon le rang
+            fade  = min(0.65, 0.25 + (i - top_n) * 0.08)
+            color = GRIS_MOY
+            alpha = fade
+            fw    = "normal"
+            fsize = 9
+            fc    = GRIS_FORT
+
+        ax.barh(n - i - 1, val, color=color, alpha=alpha, height=0.62)
+        # Valeur à droite de la barre
+        ax.text(val + max(vals_s) * 0.01, n - i - 1,
+                fmt.format(val), va="center", ha="left",
+                fontsize=fsize, fontweight=fw, color=fc)
+        # Médaille pour le podium
+        prefix = {0: "① ", 1: "② ", 2: "③ "}.get(i, "   ")
+        ax.text(-max(vals_s) * 0.01, n - i - 1,
+                prefix + cat, va="center", ha="right",
+                fontsize=fsize, fontweight=fw, color=fc)
+
+    ax.set_xlim(-max(vals_s) * 0.22, max(vals_s) * 1.18)
+    ax.set_ylim(-0.6, n - 0.4)
+    ax.yaxis.set_visible(False)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑤ divergent — graphique de divergence (positif / négatif)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def divergent(categories, valeurs,
+              titre="", sous_titre="", note="",
+              accent_pos=ACCENTS["vert"], accent_neg=ACCENTS["rouge"],
+              fmt="{:+.1f}", figsize=None):
+    """
+    Barres divergentes centrées sur zéro — parfait pour les deltas,
+    NPS, balance commerciale, évolutions positives/négatives.
+
+    Exemple
+    -------
+    >>> divergent(
+    ...     categories=mois,
+    ...     valeurs=[-3.2, +5.1, +8.4, -1.0, +12.3, -0.5],
+    ...     titre="Variation mensuelle du NPS",
+    ...     fmt="{:+.1f} pts"
+    ... )
+    """
+    fig, ax = _init_ax(figsize)
+    ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+    ax.grid(axis="y", visible=False)
+
+    y_pos = np.arange(len(categories))
+    for i, (cat, val) in enumerate(zip(categories, valeurs)):
+        color = accent_pos if val >= 0 else accent_neg
+        ax.barh(i, val, color=color, alpha=0.85, height=0.55)
+        offset = max(abs(v) for v in valeurs) * 0.02
+        ha = "left" if val >= 0 else "right"
+        x_pos = val + (offset if val >= 0 else -offset)
+        ax.text(x_pos, i, fmt.format(val),
+                va="center", ha=ha, fontsize=9.5,
+                fontweight="bold", color=TEXTE)
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(categories, color=GRIS_FORT, fontsize=10)
+    ax.axvline(0, color=GRIS_FORT, lw=1.0, zorder=5)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.xaxis.set_visible(False)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑥ bullet_chart — KPI vs objectif (remplace les jauges)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def bullet_chart(kpis: list,
+                 titre="", sous_titre="", note="",
+                 accent=ACCENT_DEFAUT, figsize=None):
+    """
+    Bullet charts (Stephen Few) — représentation compacte et honnête
+    d'un KPI face à son objectif et à ses plages de performance.
+
+    Parameters
+    ----------
+    kpis : liste de dicts ::
+        {
+            "nom"      : "Taux de conversion",
+            "valeur"   : 4.7,          # valeur actuelle
+            "objectif" : 5.0,          # ligne de cible
+            "plages"   : [3, 4, 6],    # seuils Mauvais / Moyen / Bon
+            "fmt"      : "{:.1f}%"     # format d'affichage (optionnel)
+        }
+
+    Exemple
+    -------
+    >>> bullet_chart([
+    ...     {"nom": "Conversion", "valeur": 4.7, "objectif": 5.0,
+    ...      "plages": [2, 4, 6], "fmt": "{:.1f}%"},
+    ...     {"nom": "Panier moyen", "valeur": 68, "objectif": 75,
+    ...      "plages": [40, 60, 90], "fmt": "{:.0f}€"},
+    ... ], titre="Performance commerciale vs objectifs Q4")
+    """
+    n = len(kpis)
+    fig, axes = plt.subplots(n, 1, figsize=figsize or (10, n * 1.4 + 0.8))
+    fig.patch.set_facecolor(BG)
+    if n == 1:
+        axes = [axes]
+
+    plage_colors = ["#E8E9F0", "#D0D2E0", "#B8BBD0"]  # Mauvais → Bon (gris)
+
+    for ax, kpi in zip(axes, kpis):
+        ax.set_facecolor(BG)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+        ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+
+        plages = sorted(kpi["plages"])
+        val    = kpi["valeur"]
+        obj    = kpi["objectif"]
+        fmt    = kpi.get("fmt", "{:.1f}")
+        xmax   = plages[-1] * 1.05
+
+        # Fond de plages (gris croissant = mauvais → bon)
+        limites = [0] + plages
+        for j in range(len(limites) - 1):
+            ax.barh(0, limites[j+1] - limites[j], left=limites[j],
+                    height=0.7, color=plage_colors[j % len(plage_colors)])
+
+        # Barre de valeur (accent, fine au centre)
+        ax.barh(0, val, height=0.36, color=accent, alpha=0.92, zorder=3)
+
+        # Marqueur objectif (trait vertical épais)
+        ax.plot([obj, obj], [-0.28, 0.28], color=TEXTE, lw=3.5, zorder=4)
+
+        # Label nom à gauche
+        ax.text(-xmax * 0.02, 0, kpi["nom"],
+                ha="right", va="center", fontsize=10,
+                fontweight="bold", color=TEXTE,
+                transform=ax.get_yaxis_transform())
+
+        # Valeur courante
+        ax.text(val, 0.42, fmt.format(val),
+                ha="center", va="bottom", fontsize=9.5,
+                fontweight="bold", color=accent)
+
+        # Objectif
+        ax.text(obj, -0.44, f"Obj: {fmt.format(obj)}",
+                ha="center", va="top", fontsize=8.5, color=GRIS_FORT)
+
+        ax.set_xlim(0, xmax)
+        ax.set_ylim(-0.6, 0.7)
+
+    if titre:
+        axes[0].set_title(titre, fontsize=13, fontweight="bold",
+                          color=TEXTE, pad=14, loc="left")
+    if sous_titre:
+        axes[0].annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
+                         xytext=(0, 28), textcoords="offset points",
+                         fontsize=9.5, color=GRIS_FORT, annotation_clip=False)
+    if note:
+        fig.text(0.01, 0.01, note, fontsize=8, color=GRIS_MOY,
+                 style="italic", transform=fig.transFigure)
+
+    fig.tight_layout(h_pad=0.4)
+    return fig, axes
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑦ Annotations narratives — à superposer sur n'importe quel graphique
+# ══════════════════════════════════════════════════════════════════════════════
+
+def annoter_zone(ax, x_debut, x_fin, label="",
+                 couleur=ACCENT_DEFAUT, alpha=0.10, y_label=0.95):
+    """
+    Zone colorée en surbrillance (rectangle vertical) avec étiquette.
+    À appeler APRÈS la création du graphique sur l'ax retourné.
+
+    Exemple
+    -------
+    >>> fig, ax = ligne_focus(...)
+    >>> annoter_zone(ax, x_debut="Mar", x_fin="Mai", label="Période COVID",
+    ...              couleur=ACCENTS["rouge"])
+    """
+    ax.axvspan(x_debut, x_fin, alpha=alpha, color=couleur, zorder=1)
+    ymin, ymax = ax.get_ylim()
+    y = ymin + (ymax - ymin) * y_label
+    x_mid = (x_debut + x_fin) / 2 if isinstance(x_debut, (int, float)) else x_debut
+    if label:
+        ax.text(x_mid, y, label, ha="center", va="top",
+                fontsize=9, color=couleur, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.3", fc=BG, ec=couleur, alpha=0.85))
+
+
+def annoter_seuil(ax, y, label="", couleur=ACCENTS["rouge"],
+                  cote="droite", style="--"):
+    """
+    Ligne horizontale de seuil / objectif / référence avec étiquette.
+
+    Exemple
+    -------
+    >>> annoter_seuil(ax, y=100, label="Objectif 100k", couleur=ACCENTS["vert"])
+    """
+    ax.axhline(y, color=couleur, lw=1.6, linestyle=style, alpha=0.85, zorder=3)
+    xmin, xmax = ax.get_xlim()
+    x_pos = xmax if cote == "droite" else xmin
+    ha    = "right" if cote == "droite" else "left"
+    if label:
+        ax.text(x_pos, y, f"  {label}  ", ha=ha, va="bottom",
+                fontsize=9, color=couleur, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", fc=BG, ec=couleur, alpha=0.9))
+
+
+def annoter_delta(ax, x, y_debut, y_fin, label="",
+                  couleur=None, fmt="{:+.0f}"):
+    """
+    Accolade verticale entre deux points avec la variation annotée.
+    Utile pour montrer une hausse/baisse sur un graphique en lignes.
+
+    Exemple
+    -------
+    >>> annoter_delta(ax, x=5, y_debut=42, y_fin=71, label="×1.7", couleur=ACCENTS["vert"])
+    """
+    delta  = y_fin - y_debut
+    if couleur is None:
+        couleur = ACCENTS["vert"] if delta >= 0 else ACCENTS["rouge"]
+
+    ax.annotate("", xy=(x, y_fin), xytext=(x, y_debut),
+                arrowprops=dict(arrowstyle="<->", color=couleur, lw=1.8))
+    mid = (y_debut + y_fin) / 2
+    txt = label if label else fmt.format(delta)
+    ax.text(x, mid, f" {txt}", va="center", ha="left",
+            fontsize=9.5, color=couleur, fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.3", fc=BG, ec=couleur, alpha=0.85))
+
+
+def annoter_point(ax, x, y, label, couleur=ACCENT_DEFAUT,
+                  direction="haut", offset=14):
+    """
+    Annotation pointée sur un point de données (flèche + bulle texte).
+
+    Parameters
+    ----------
+    direction : "haut" | "bas" | "gauche" | "droite"
+
+    Exemple
+    -------
+    >>> annoter_point(ax, x=8, y=95, label="Pic historique", couleur=ACCENTS["rouge"])
+    """
+    dirs = {
+        "haut"   : (0,  offset),
+        "bas"    : (0, -offset),
+        "gauche" : (-offset*2, 0),
+        "droite" : ( offset*2, 0),
+    }
+    dx, dy = dirs.get(direction, (0, offset))
+    ax.annotate(
+        label, xy=(x, y), xytext=(dx, dy),
+        textcoords="offset points",
+        fontsize=9.5, color=couleur, fontweight="bold",
+        ha="center", va="bottom" if dy > 0 else "top",
+        arrowprops=dict(arrowstyle="-|>", color=couleur,
+                        lw=1.5, connectionstyle="arc3,rad=0.15"),
+        bbox=dict(boxstyle="round,pad=0.35", fc=BG, ec=couleur,
+                  alpha=0.92, linewidth=1.4)
+    )
+    # Point accentué
+    ax.scatter([x], [y], color=couleur, s=55, zorder=5, edgecolors=BG, linewidths=1.5)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑧ barres_connectees — tendance temporelle par entité avec deltas en bulles
+# ══════════════════════════════════════════════════════════════════════════════
+
+def barres_connectees(categories: list, periodes: list, valeurs: list,
+                      couleurs: list = None, groupes: dict = None,
+                      afficher_delta=True, fmt_delta="{:+.0f}", fmt_valeur="{:.0f}",
+                      accent_pos=None, accent_neg=None,
+                      titre="", sous_titre="", note="", figsize=None):
+    """
+    Pour chaque entité, affiche N barres chronologiques (une par période)
+    reliées par une ligne suivant le sommet des barres. Les variations entre
+    périodes sont annotées dans des bulles colorées (delta). Montre à la fois
+    les valeurs absolues et leur évolution.
+
+    Parameters
+    ----------
+    categories : noms des entités (ex: ["IA", "Cloud", ...])
+    periodes   : noms des périodes (ex: ["2022", "2023", "2024"])
+    valeurs    : liste de listes — valeurs[i][j] = entité i, période j
+    couleurs   : une couleur par entité (défaut : PALETTE de beau_graphique)
+    groupes    : {"Groupe A": ["IA", "Cloud"], ...} pour une légende groupée
+
+    Exemple
+    -------
+    >>> barres_connectees(
+    ...     categories=["IA", "Cloud & Edge"],
+    ...     periodes=["2022", "2023", "2024"],
+    ...     valeurs=[[295, 245, 290], [40, 63, 95]],
+    ...     titre="Investissements par tendance, 2022–2024 (Mds$)",
+    ... )
+    """
+    if couleurs is None:
+        import beau_graphique as bg
+        couleurs = bg.PALETTE
+    accent_pos = accent_pos or ACCENTS["vert"]
+    accent_neg = accent_neg or ACCENTS["rouge"]
+
+    n_cat = len(categories)
+    n_per = len(periodes)
+    largeur = 0.55
+    pas_barre = largeur + 0.15
+    largeur_groupe = n_per * pas_barre
+    pas_groupe = largeur_groupe + 1.0
+
+    positions = {(i, j): i * pas_groupe + j * pas_barre
+                 for i in range(n_cat) for j in range(n_per)}
+    ymax_global = max(max(row) for row in valeurs)
+
+    fig, ax = _init_ax(figsize or (max(10, n_cat * n_per * 0.9), 6))
+
+    for i, cat in enumerate(categories):
+        couleur = couleurs[i % len(couleurs)]
+        xs = [positions[(i, j)] for j in range(n_per)]
+        sommets = list(valeurs[i])
+
+        for x, val in zip(xs, sommets):
+            ax.bar(x, val, width=largeur, color=couleur, alpha=0.88, zorder=3)
+            ax.text(x, val + ymax_global * 0.02, fmt_valeur.format(val),
+                    ha="center", va="bottom", fontsize=8.5, color=TEXTE)
+
+        ax.plot(xs, sommets, color=couleur, lw=1.2, alpha=0.7, zorder=2)
+
+        if afficher_delta:
+            for j in range(n_per - 1):
+                x_mid = (xs[j] + xs[j + 1]) / 2
+                y_mid = (sommets[j] + sommets[j + 1]) / 2
+                delta = sommets[j + 1] - sommets[j]
+                couleur_bulle = accent_pos if delta >= 0 else accent_neg
+                ax.scatter([x_mid], [y_mid], s=600, color=couleur_bulle, zorder=5)
+                ax.text(x_mid, y_mid, fmt_delta.format(delta),
+                        ha="center", va="center", fontsize=8.5,
+                        fontweight="bold", color="white", zorder=6)
+
+        centre = sum(xs) / len(xs)
+        ax.text(centre, -ymax_global * 0.08, cat, ha="center", va="top",
+                fontsize=9.5, color=TEXTE_DOUX, fontweight="bold")
+
+    all_x = [positions[(i, j)] for i in range(n_cat) for j in range(n_per)]
+    all_labels = [periodes[j] for i in range(n_cat) for j in range(n_per)]
+    ax.set_xticks(all_x)
+    ax.set_xticklabels(all_labels, fontsize=8, color=GRIS_FORT)
+
+    ax.set_xlim(-0.6, max(positions.values()) + largeur + 0.6)
+    ax.set_ylim(-ymax_global * 0.22, ymax_global * 1.25)
+    ax.yaxis.set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.grid(visible=False)
+
+    if groupes:
+        handles = []
+        for nom_groupe, membres in groupes.items():
+            idx = categories.index(membres[0])
+            handles.append(mpatches.Patch(color=couleurs[idx % len(couleurs)], label=nom_groupe))
+    else:
+        handles = [mpatches.Patch(color=couleurs[i % len(couleurs)], label=cat)
+                  for i, cat in enumerate(categories)]
+    ax.legend(handles=handles, loc="upper left", frameon=False,
+             fontsize=9, ncol=min(len(handles), 4))
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig), ax

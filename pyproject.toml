@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beau-graphique"
+version = "0.1.0"
+description = "Wrapper matplotlib en français pour des graphiques soignés, prêts pour la présentation"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "matplotlib>=3.5",
+    "numpy",
+]
+
+[project.optional-dependencies]
+pandas = ["pandas"]
+polars = ["polars"]
+
+# Modules plats (pas un sous-paquet) : `import beau_graphique`, `import narratif`,
+# `import pipeline`, `import themes` fonctionnent à l'identique en mode "copie de
+# fichiers" (fichiers à plat dans un projet) et en mode "pip install" (modules
+# installés à la racine de site-packages). Aucun import relatif n'est nécessaire.
+[tool.setuptools]
+py-modules = ["beau_graphique", "narratif", "pipeline", "themes"]
+
+[tool.setuptools.package-dir]
+"" = "src/beau_graphique"

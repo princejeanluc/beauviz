@@ -1,0 +1,164 @@
+"""
+Tests de fumée pour les graphiques McKinsey :
+dot_plot_comparatif, bulle_4d, unit_chart (beau_graphique.py)
+et barres_connectees (narratif.py).
+
+Lancer avec : pytest tests/test_mckinsey.py
+Nécessite le projet installé (pip install -e .) ou les modules sur le PYTHONPATH.
+"""
+
+import matplotlib
+matplotlib.use("Agg")  # pas d'affichage pendant les tests
+import matplotlib.pyplot as plt
+import pytest
+
+from beau_graphique import dot_plot_comparatif, bulle_4d, unit_chart
+from narratif import barres_connectees
+from themes import appliquer, reinitialiser
+
+
+def _est_figure_axes(resultat):
+    assert isinstance(resultat, tuple) and len(resultat) == 2
+    fig, ax = resultat
+    assert hasattr(ax, "get_xlim")
+    return fig, ax
+
+
+# ── dot_plot_comparatif ──────────────────────────────────────────────────────
+
+def test_dot_plot_comparatif_retourne_fig_ax():
+    resultat = dot_plot_comparatif({"A": (0.1, 0.3), "B": (0.5, 0.7)})
+    _est_figure_axes(resultat)
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_parametres_vides():
+    dot_plot_comparatif({"X": (0, 1)}, titre="", note="", figsize=None)
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_avec_descriptions():
+    fig, ax = dot_plot_comparatif(
+        {"News": (0.05, 0.15), "Searches": (0.08, 0.19)},
+        descriptions={"News": "Press reports featuring trend-related phrases"},
+        label_avant="2020", label_apres="2024",
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_compatible_themes():
+    appliquer("finance", verbose=False)
+    fig, ax = dot_plot_comparatif({"X": (0.1, 0.8), "Y": (0.3, 0.6)})
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+    reinitialiser()
+
+
+# ── bulle_4d ──────────────────────────────────────────────────────────────────
+
+def test_bulle_4d_retourne_fig_ax():
+    resultat = bulle_4d(
+        x=[0.9, 0.15, 0.1], y=[0.9, 0.55, 0.4],
+        taille=[200, 10, 30], couleur_var=[4, 3, 3],
+    )
+    _est_figure_axes(resultat)
+    plt.close("all")
+
+
+def test_bulle_4d_avec_labels_et_quadrants():
+    fig, ax = bulle_4d(
+        x=[0.9, 0.15, 0.1, 0.05], y=[0.9, 0.55, 0.4, 0.2],
+        taille=[200, 10, 30, 5], couleur_var=[4, 3, 3, 1],
+        labels=["IA", "Semi-conducteurs", "Connectivité", "Espace"],
+        xlabel="Intérêt", ylabel="Innovation",
+        label_taille="Investissement", label_couleur="Adoption",
+        quadrants=True,
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_bulle_4d_taille_constante_ne_plante_pas():
+    # toutes les bulles ont la même taille → division par zéro potentielle
+    fig, ax = bulle_4d(x=[0.1, 0.2], y=[0.3, 0.4], taille=[50, 50], couleur_var=[1, 1])
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+# ── unit_chart ────────────────────────────────────────────────────────────────
+
+def test_unit_chart_mode_proportion():
+    fig, ax = unit_chart(
+        categories=["Python", "C++", "GPU"], valeurs=[37, 21, 30], mode="proportion",
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_unit_chart_mode_ratio():
+    fig, ax = unit_chart(
+        categories=["Python", "C++"], valeurs=[0.5, 2.7], mode="ratio",
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_unit_chart_mode_ratio_avec_reference():
+    fig, ax = unit_chart(
+        categories=["Python", "C++"], valeurs=[10, 27], reference=[20, 10], mode="ratio",
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_unit_chart_parametres_vides():
+    unit_chart(categories=["A"], valeurs=[10], titre="", note="", figsize=None)
+    plt.close("all")
+
+
+# ── barres_connectees ──────────────────────────────────────────────────────────
+
+def test_barres_connectees_retourne_fig_ax():
+    resultat = barres_connectees(
+        categories=["IA", "Cloud"],
+        periodes=["2022", "2023", "2024"],
+        valeurs=[[295, 245, 290], [40, 63, 95]],
+    )
+    _est_figure_axes(resultat)
+    plt.close("all")
+
+
+def test_barres_connectees_sans_delta():
+    fig, ax = barres_connectees(
+        categories=["IA"], periodes=["2022", "2023"], valeurs=[[10, 20]],
+        afficher_delta=False,
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_barres_connectees_avec_groupes():
+    fig, ax = barres_connectees(
+        categories=["IA", "Cloud", "Robotique"],
+        periodes=["2022", "2023"],
+        valeurs=[[10, 20], [30, 25], [5, 8]],
+        groupes={"Numérique": ["IA", "Cloud"], "Physique": ["Robotique"]},
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+
+
+def test_barres_connectees_compatible_themes():
+    appliquer("sombre", verbose=False)
+    fig, ax = barres_connectees(
+        categories=["IA"], periodes=["2022", "2023"], valeurs=[[10, 20]],
+    )
+    _est_figure_axes((fig, ax))
+    plt.close("all")
+    reinitialiser()
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(pytest.main([__file__, "-v"]))
