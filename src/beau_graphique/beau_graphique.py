@@ -43,16 +43,10 @@ FORMATS = {
     "large":     (14, 5.6),       # très large — dashboards multi-graphiques
 }
 
-
-# Formats de figure prédéfinis
-# Utilisez format="slide" au lieu de figsize=(13.33, 7.5)
-FORMATS = {
-    "slide":     (13.33, 7.5),    # 16:9 — PowerPoint, Google Slides
-    "a4":        (11.69, 5.5),    # A4 paysage demi-hauteur — rapport Word / PDF
-    "a4_pleine": (11.69, 8.27),   # A4 paysage pleine page
-    "carre":     (7, 7),          # carré — réseaux sociaux, miniatures
-    "large":     (14, 5.6),       # très large — dashboards multi-graphiques
-}
+# Registre de couleurs par entité
+# Remplissez une fois en début de session pour assurer la cohérence
+# des couleurs entre tous les graphiques d'un même rapport.
+COULEURS_ENTITES: dict = {}
 
 
 
@@ -125,6 +119,63 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
     if fig and ajuster_layout:
         fig.tight_layout()
     return fig, ax
+
+
+def _palette_pour(noms: list) -> list:
+    """Retourne les couleurs pour une liste de noms, en consultant COULEURS_ENTITES
+    en priorité et en tombant sur PALETTE en fallback."""
+    return [
+        COULEURS_ENTITES.get(str(nom), PALETTE[i % len(PALETTE)])
+        for i, nom in enumerate(noms)
+    ]
+
+
+def enregistrer_couleurs(mapping: dict, fusionner: bool = True) -> None:
+    """
+    Associe des couleurs hex à des entités nommées (villes, produits, séries…)
+    pour assurer la cohérence visuelle entre tous les graphiques d'un rapport.
+
+    Parameters
+    ----------
+    mapping  : dict {"NomEntité": "#couleur_hex", ...}
+    fusionner: True (défaut) — ajoute/met à jour le registre existant.
+               False — remplace l'intégralité du registre.
+
+    Exemple
+    -------
+    >>> enregistrer_couleurs({
+    ...     "Douala":    "#4361EE",
+    ...     "Yaoundé":   "#F3722C",
+    ...     "Bafoussam": "#2DC653",
+    ... })
+    >>> barres(["Douala", "Yaoundé"], [79, 61])   # → bleu et orange automatiquement
+    >>> ligne(x=mois, y_series={"Douala": [...], "Yaoundé": [...]})  # idem
+    """
+    global COULEURS_ENTITES
+    if fusionner:
+        COULEURS_ENTITES.update(mapping)
+    else:
+        COULEURS_ENTITES = dict(mapping)
+
+
+def reinitialiser_couleurs() -> None:
+    """Vide le registre de couleurs par entité."""
+    COULEURS_ENTITES.clear()
+
+
+def _couleurs_auto(categories, couleur_explicite=None, couleurs_multiples=False):
+    """
+    Résout la liste de couleurs pour barres().
+    — couleur_explicite fourni → toutes les barres dans cette couleur.
+    — Sinon, si couleurs_multiples=True OU au moins une catégorie est dans le
+      registre → une couleur par catégorie (via _palette_pour).
+    — Sinon → PALETTE[0] pour toutes.
+    """
+    if couleur_explicite is not None:
+        return couleur_explicite
+    if couleurs_multiples or any(str(c) in COULEURS_ENTITES for c in categories):
+        return _palette_pour([str(c) for c in categories])
+    return PALETTE[0]
 
 
 def _resoudre_figsize(figsize, format=None):
@@ -211,8 +262,9 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     """
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format)
+    couleurs_series = _palette_pour(list(y_series.keys()))
     for i, (nom, vals) in enumerate(y_series.items()):
-        color = PALETTE[i % len(PALETTE)]
+        color = couleurs_series[i]
         mk = "o" if markers else None
         ax.plot(x, vals, label=nom, color=color, marker=mk,
                 markerfacecolor="white", markeredgecolor=color,
@@ -222,7 +274,7 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 
     # Annotation valeur finale
     for i, (nom, vals) in enumerate(y_series.items()):
-        color = PALETTE[i % len(PALETTE)]
+        color = couleurs_series[i]
         ax.annotate(f"{vals[-1]}",
                     xy=(x[-1], vals[-1]),
                     xytext=(6, 0), textcoords="offset points",
@@ -268,10 +320,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format)
 
-    if couleurs_multiples:
-        colors = [PALETTE[i % len(PALETTE)] for i in range(len(categories))]
-    else:
-        colors = couleur or PALETTE[0]
+    colors = _couleurs_auto(categories, couleur, couleurs_multiples)
 
     if horizontal:
         bars = ax.barh(categories, valeurs, color=colors, height=0.55)
@@ -331,11 +380,12 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
     n_groupes = len(groupes)
     x = np.arange(len(categories))
     width = 0.7 / n_groupes
+    couleurs_groupes = _palette_pour(list(groupes.keys()))
 
     for i, (nom, vals) in enumerate(groupes.items()):
         offset = (i - n_groupes / 2 + 0.5) * width
         bars = ax.bar(x + offset, vals, width * 0.9, label=nom,
-                      color=PALETTE[i % len(PALETTE)])
+                      color=couleurs_groupes[i])
         for bar, val in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width() / 2,
                     bar.get_height() + max(max(v) for v in groupes.values()) * 0.01,
@@ -379,13 +429,14 @@ def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     noms = list(y_series.keys())
     valeurs = list(y_series.values())
 
+    couleurs_series_aire = _palette_pour(noms)
     if empile:
         ax.stackplot(x, valeurs, labels=noms,
-                     colors=[c + "CC" for c in PALETTE[:len(noms)]],
+                     colors=[c + "CC" for c in couleurs_series_aire],
                      alpha=0.88)
     else:
         for i, (nom, vals) in enumerate(y_series.items()):
-            color = PALETTE[i % len(PALETTE)]
+            color = couleurs_series_aire[i]
             ax.fill_between(x, vals, alpha=0.20, color=color)
             ax.plot(x, vals, label=nom, color=color, linewidth=2.4)
 
@@ -549,7 +600,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
     wedge_kw = dict(linewidth=2.5, edgecolor="white")
     wedges, texts, autotexts = ax.pie(
         valeurs, labels=None, autopct="%1.1f%%",
-        colors=PALETTE[:len(valeurs)], explode=explode,
+        colors=_palette_pour(labels), explode=explode,
         startangle=90, wedgeprops=wedge_kw,
         pctdistance=0.82 if donut else 0.65
     )

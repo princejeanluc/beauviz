@@ -703,7 +703,7 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
     """
     if couleurs is None:
         import beau_graphique as bg
-        couleurs = bg.PALETTE
+        couleurs = bg._palette_pour(categories)
     accent_pos = accent_pos or ACCENTS["vert"]
     accent_neg = accent_neg or ACCENTS["rouge"]
 
