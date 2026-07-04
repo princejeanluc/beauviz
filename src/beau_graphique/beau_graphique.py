@@ -178,6 +178,74 @@ def _couleurs_auto(categories, couleur_explicite=None, couleurs_multiples=False)
     return PALETTE[0]
 
 
+_COULEUR_HAUT   = "#2DC653"   # vert — au-dessus du seuil
+_COULEUR_BAS    = "#E63946"   # rouge — en-dessous du seuil
+_COULEUR_NEUTRE = "#B0B3C6"   # gris — exactement égal au seuil
+
+
+def colorier_si(seuil, couleur_haut=None, couleur_bas=None, couleur_egal=None):
+    """
+    Retourne une fonction ``fn_couleur(categorie, valeur) -> str`` qui colore
+    chaque barre (ou point) selon sa position par rapport à un seuil.
+
+    À passer au paramètre ``fn_couleur=`` de :func:`barres` ou :func:`lollipop`.
+
+    Parameters
+    ----------
+    seuil        : valeur pivot (objectif, moyenne, cible…)
+    couleur_haut : couleur quand valeur > seuil  (défaut : vert  #2DC653)
+    couleur_bas  : couleur quand valeur < seuil  (défaut : rouge #E63946)
+    couleur_egal : couleur quand valeur == seuil (défaut : gris  #B0B3C6)
+
+    Exemple
+    -------
+    >>> barres(mois, ventes, fn_couleur=colorier_si(seuil=50_000))
+    >>> lollipop(villes, scores, fn_couleur=colorier_si(70, couleur_bas="#F3722C"))
+    """
+    ch = couleur_haut or _COULEUR_HAUT
+    cb = couleur_bas  or _COULEUR_BAS
+    ce = couleur_egal or _COULEUR_NEUTRE
+
+    def _fn(_, val):
+        if val > seuil:  return ch
+        if val < seuil:  return cb
+        return ce
+
+    return _fn
+
+
+def colorier_selon(regles: list):
+    """
+    Retourne une fonction ``fn_couleur(categorie, valeur) -> str`` depuis une
+    liste de règles priorisées.
+
+    Chaque règle est un tuple ``(condition, couleur)`` :
+
+    * ``condition`` : ``True`` (fallback toujours vrai) **ou** un callable
+      ``(valeur) -> bool``.
+    * ``couleur``   : chaîne hex (``"#2DC653"``) ou nom matplotlib (``"red"``).
+
+    Les règles sont testées dans l'ordre ; la première qui correspond est
+    retenue.  Terminez toujours par un fallback ``(True, couleur)``.
+
+    Exemple
+    -------
+    >>> fn = colorier_selon([
+    ...     (lambda v: v >= 80, "#2DC653"),   # vert  — excellent
+    ...     (lambda v: v >= 50, "#F3722C"),   # orange — correct
+    ...     (True,              "#E63946"),   # rouge  — insuffisant
+    ... ])
+    >>> barres(villes, scores, fn_couleur=fn)
+    """
+    def _fn(_, val):
+        for condition, couleur in regles:
+            if condition is True or condition(val):
+                return couleur
+        return PALETTE[0]
+
+    return _fn
+
+
 def _resoudre_figsize(figsize, format=None):
     """Retourne le figsize effectif depuis un preset ou une valeur explicite.
     figsize prend la priorité sur format si les deux sont fournis.
@@ -292,7 +360,8 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 
 def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
            note="", couleur=None, horizontal=False, valeurs_sur_barres=True,
-           couleurs_multiples=False, figsize=None, ax=None, format=None, **_extra):
+           couleurs_multiples=False, fn_couleur=None, figsize=None, ax=None,
+           format=None, **_extra):
     """
     Graphique en barres simples (verticales ou horizontales).
 
@@ -320,7 +389,10 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format)
 
-    colors = _couleurs_auto(categories, couleur, couleurs_multiples)
+    if fn_couleur is not None:
+        colors = [fn_couleur(cat, val) for cat, val in zip(categories, valeurs)]
+    else:
+        colors = _couleurs_auto(categories, couleur, couleurs_multiples)
 
     if horizontal:
         bars = ax.barh(categories, valeurs, color=colors, height=0.55)
@@ -1283,8 +1355,9 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
-             xlabel="", note="", couleur=None, trier=True, ligne_ref: float = None,
-             label_ref="", taille_point=8, figsize=None, ax=None, format=None):
+             xlabel="", note="", couleur=None, fn_couleur=None, trier=True,
+             ligne_ref: float = None, label_ref="", taille_point=8,
+             figsize=None, ax=None, format=None):
     """
     Tige + point : classement de catégories, plus léger visuellement qu'une
     barre pleine quand on a beaucoup de catégories ou peu de place.
@@ -1325,7 +1398,11 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     y_pos = np.arange(len(categories_t))
 
     ax.hlines(y_pos, 0, valeurs_t, color="#D8DAE8", linewidth=1.6, zorder=2)
-    ax.plot(valeurs_t, y_pos, "o", color=couleur, markersize=taille_point, zorder=3)
+    if fn_couleur is not None:
+        pts_couleurs = [fn_couleur(cat, val) for cat, val in zip(categories_t, valeurs_t)]
+        ax.scatter(valeurs_t, y_pos, c=pts_couleurs, s=taille_point ** 2, zorder=3)
+    else:
+        ax.plot(valeurs_t, y_pos, "o", color=couleur, markersize=taille_point, zorder=3)
 
     marge = (max(valeurs_t) * 0.03) if valeurs_t else 1
     for yi, val in zip(y_pos, valeurs_t):
