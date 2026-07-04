@@ -48,27 +48,108 @@ FORMATS = {
 # des couleurs entre tous les graphiques d'un même rapport.
 COULEURS_ENTITES: dict = {}
 
+# ── Thèmes ──────────────────────────────────────────────────────────────────
+# Chaque thème définit 6 rôles sémantiques consultés par toutes les fonctions.
+# Passez votre propre dict à init(theme={...}) pour personnaliser entièrement.
+THEMES: dict = {
+    "light": {
+        "bg":          "#F7F8FC",   # fond figure / axes
+        "texte":       "#1A1C2E",   # texte principal (titres, annotations grasses)
+        "texte_dim":   "#6B6F85",   # texte secondaire (sous-titres, axes, notes)
+        "grille":      "#D8DAE8",   # lignes de grille, séparateurs légers
+        "fond_neutre": "#FFFFFF",   # blanc neutre (trou donut, boîte violin, bord barre)
+        "serie_dim":   "#A8ABBC",   # séries non-focus, éléments en retrait
+    },
+    "dark": {
+        "bg":          "#0D1B2A",
+        "texte":       "#E8ECF4",
+        "texte_dim":   "#8A8FA8",
+        "grille":      "#1E2D40",
+        "fond_neutre": "#0D1B2A",
+        "serie_dim":   "#3A4A5E",
+    },
+}
+
+# Thème actif — toutes les fonctions le lisent via _T["clé"]
+_T: dict = dict(THEMES["light"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Initialisation
 # ══════════════════════════════════════════════════════════════════════════════
 
-def init():
-    """Active le style beau_graphique pour toute la session matplotlib."""
+def init(theme="light"):
+    """
+    Active le style beau_graphique et configure le thème visuel.
+
+    Parameters
+    ----------
+    theme : str ou dict
+        ``"light"`` (défaut) — fond clair, idéal pour rapports imprimés.
+        ``"dark"``  — fond sombre, idéal pour slides et présentations dark.
+        ``dict``    — thème personnalisé ; les clés manquantes sont héritées
+                      du thème ``"light"``. Clés disponibles :
+                      ``bg``, ``texte``, ``texte_dim``, ``grille``,
+                      ``fond_neutre``, ``serie_dim``.
+
+    Exemple
+    -------
+    >>> init()                             # thème clair par défaut
+    >>> init(theme="dark")                 # thème sombre
+    >>> init(theme={"bg": "#1A1A2E",       # thème personnalisé (Marine nuit)
+    ...             "texte": "#EAEDF4",
+    ...             "texte_dim": "#7B8499",
+    ...             "grille": "#1E2440",
+    ...             "fond_neutre": "#1A1A2E",
+    ...             "serie_dim": "#3C4A66"})
+    """
+    global _T
+
+    # ── Résoudre le thème ─────────────────────────────────────────────────────
+    if isinstance(theme, str):
+        if theme not in THEMES:
+            valides = ", ".join(f'"{k}"' for k in THEMES)
+            raise ValueError(f"Thème inconnu : '{theme}'. Valides : {valides}")
+        resolved = dict(THEMES[theme])
+    elif isinstance(theme, dict):
+        resolved = {**THEMES["light"], **theme}
+    else:
+        raise TypeError(f"theme doit être str ou dict, reçu {type(theme).__name__}")
+
+    _T = resolved
+    nom_theme = theme if isinstance(theme, str) else "personnalisé"
+
+    # ── Charger le style de base puis écraser avec les couleurs du thème ──────
     if os.path.exists(_STYLE_PATH):
         plt.style.use(_STYLE_PATH)
-    else:
-        # fallback léger si le fichier .mplstyle n'est pas trouvé
-        plt.rcParams.update({
-            "figure.facecolor": "#F7F8FC",
-            "axes.facecolor":   "#F7F8FC",
-            "axes.spines.top":  False,
-            "axes.spines.right": False,
-            "axes.grid": True,
-            "grid.alpha": 0.6,
-        })
-    print("✓ Style beau_graphique activé.")
+
+    plt.rcParams.update({
+        "figure.facecolor":  _T["bg"],
+        "axes.facecolor":    _T["bg"],
+        "axes.edgecolor":    _T["grille"],
+        "axes.labelcolor":   _T["texte_dim"],
+        "text.color":        _T["texte"],
+        "xtick.color":       _T["texte_dim"],
+        "ytick.color":       _T["texte_dim"],
+        "grid.color":        _T["grille"],
+        "legend.facecolor":  _T["bg"],
+        "legend.edgecolor":  _T["grille"],
+        "savefig.facecolor": _T["bg"],
+    })
+
+    # ── Synchroniser les constantes de couleur de narratif.py ─────────────────
+    try:
+        import narratif as _nar
+        _nar.BG         = _T["bg"]
+        _nar.TEXTE      = _T["texte"]
+        _nar.TEXTE_DOUX = _T["texte_dim"]
+        _nar.GRIS_FORT  = _T["texte_dim"]
+        _nar.GRIS_MOY   = _T["serie_dim"]
+        _nar.GRIS_CLAIR = _T["grille"]
+    except ImportError:
+        pass
+
+    print(f"✓ Style beau_graphique activé (thème : {nom_theme}).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -95,11 +176,11 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
     """
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=14, loc="left")
+                     color=_T["texte"], pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 26), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if xlabel:
         ax.set_xlabel(xlabel)
     if ylabel:
@@ -110,7 +191,7 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
         ax.legend(loc="best")
 
     if note and fig:
-        fig.text(0.01, -0.03, note, fontsize=8.5, color="#9295A8",
+        fig.text(0.01, -0.03, note, fontsize=8.5, color=_T["texte_dim"],
                  style="italic", transform=ax.transAxes)
 
     ax.yaxis.set_tick_params(length=0)
@@ -335,7 +416,7 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
         color = couleurs_series[i]
         mk = "o" if markers else None
         ax.plot(x, vals, label=nom, color=color, marker=mk,
-                markerfacecolor="white", markeredgecolor=color,
+                markerfacecolor=_T["fond_neutre"], markeredgecolor=color,
                 markeredgewidth=2, zorder=3)
         if fill_last and i == 0:
             ax.fill_between(x, vals, alpha=0.12, color=color)
@@ -401,7 +482,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
             for bar, val in zip(bars, valeurs):
                 ax.text(bar.get_width() + max(valeurs) * 0.01, bar.get_y() + bar.get_height() / 2,
                         f"{val:,.0f}", va="center", ha="left", fontsize=9.5, fontweight="bold",
-                        color="#2D2F3E")
+                        color=_T["texte"])
         ax.set_xlim(0, max(valeurs) * 1.15)
         ax.xaxis.set_visible(False)
         ax.spines["bottom"].set_visible(False)
@@ -411,7 +492,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
             for bar, val in zip(bars, valeurs):
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(valeurs) * 0.01,
                         f"{val:,.0f}", ha="center", va="bottom", fontsize=9.5,
-                        fontweight="bold", color="#2D2F3E")
+                        fontweight="bold", color=_T["texte"])
         ax.set_ylim(0, max(valeurs) * 1.15)
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
@@ -461,7 +542,7 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
         for bar, val in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width() / 2,
                     bar.get_height() + max(max(v) for v in groupes.values()) * 0.01,
-                    f"{val}", ha="center", va="bottom", fontsize=8.5, color="#2D2F3E")
+                    f"{val}", ha="center", va="bottom", fontsize=8.5, color=_T["texte"])
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
@@ -542,7 +623,7 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
     fig, ax = _new_fig(figsize, ax=ax, format=format)
     color = couleur or PALETTE[0]
 
-    ax.hist(data, bins=bins, color=color, alpha=0.75, edgecolor="white", linewidth=0.5)
+    ax.hist(data, bins=bins, color=color, alpha=0.75, edgecolor=_T["fond_neutre"], linewidth=0.5)
 
     if courbe_densite:
         from scipy.stats import gaussian_kde
@@ -596,7 +677,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format)
 
-    scatter_kw = dict(alpha=0.75, edgecolors="white", linewidths=0.6)
+    scatter_kw = dict(alpha=0.75, edgecolors=_T["fond_neutre"], linewidths=0.6)
 
     if couleur_var is not None:
         scatter_kw["c"] = couleur_var
@@ -620,7 +701,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
     if labels:
         for xi, yi, lb in zip(x, y, labels):
             ax.annotate(lb, (xi, yi), xytext=(5, 5), textcoords="offset points",
-                        fontsize=8.5, color="#4A4D6A")
+                        fontsize=8.5, color=_T["texte_dim"])
 
     if ligne_tendance:
         es_date_x = _es_date(x)
@@ -669,7 +750,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
     if exploser_max:
         explode[np.argmax(valeurs)] = 0.06
 
-    wedge_kw = dict(linewidth=2.5, edgecolor="white")
+    wedge_kw = dict(linewidth=2.5, edgecolor=_T["fond_neutre"])
     wedges, texts, autotexts = ax.pie(
         valeurs, labels=None, autopct="%1.1f%%",
         colors=_palette_pour(labels), explode=explode,
@@ -687,7 +768,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
         ax.add_patch(circle)
         total = sum(valeurs)
         ax.text(0, 0, f"Total\n{total:,.0f}", ha="center", va="center",
-                fontsize=12, fontweight="bold", color="#1A1C2E")
+                fontsize=12, fontweight="bold", color=_T["texte"])
 
     # Légende externe propre
     legend_patches = [mpatches.Patch(color=PALETTE[i], label=f"{lb}  ({v})")
@@ -699,13 +780,13 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
 
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=18, loc="center")
+                     color=_T["texte"], pad=18, loc="center")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0.5, 1.04), xycoords="axes fraction",
-                    ha="center", fontsize=10, color="#6B6F85")
+                    ha="center", fontsize=10, color=_T["texte_dim"])
     if note and fig:
         fig.text(0.5, -0.04, note, ha="center", fontsize=8.5,
-                 color="#9295A8", style="italic")
+                 color=_T["texte_dim"], style="italic")
 
     if ajuster_layout:
         fig.tight_layout()
@@ -769,12 +850,12 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
 
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=14, loc="left")
+                     color=_T["texte"], pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1.02), xycoords="axes fraction",
-                    fontsize=10, color="#6B6F85")
+                    fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.03, note, fontsize=8.5, color="#9295A8",
+        fig.text(0.01, -0.03, note, fontsize=8.5, color=_T["texte_dim"],
                  style="italic", transform=ax.transAxes)
 
     if ajuster_layout:
@@ -831,11 +912,11 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
         avant, apres = colonnes[nom]
 
         if i > 0:
-            ax.axvline(i - 0.5, color="#D8DAE8", lw=0.5, zorder=0)
+            ax.axvline(i - 0.5, color=_T["grille"], lw=0.5, zorder=0)
 
         if apres != avant:
             ax.annotate("", xy=(i, apres), xytext=(i, avant),
-                        arrowprops=dict(arrowstyle="->", color="#A8ABBC", lw=1.3),
+                        arrowprops=dict(arrowstyle="->", color=_T["serie_dim"], lw=1.3),
                         zorder=2)
 
         ax.scatter([i], [avant], s=120, facecolor="none", edgecolor=couleur,
@@ -845,19 +926,19 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
 
         # en-têtes de colonne en 2 niveaux, hors zone graphique
         ax.text(i, 1.32, nom, transform=trans, ha="center", va="bottom",
-                fontsize=10, fontweight="bold", color="#1A1C2E", clip_on=False)
+                fontsize=10, fontweight="bold", color=_T["texte"], clip_on=False)
         desc = descriptions.get(nom)
         if desc:
             ax.text(i, 1.04, textwrap.fill(desc, 18), transform=trans,
-                    ha="center", va="bottom", fontsize=8.5, color="#6B6F85",
+                    ha="center", va="bottom", fontsize=8.5, color=_T["texte_dim"],
                     linespacing=1.3, clip_on=False)
 
     ax.set_xlim(-0.6, n - 0.4)
     ax.xaxis.set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#D8DAE8")
-    ax.spines["bottom"].set_color("#D8DAE8")
+    ax.spines["left"].set_color(_T["grille"])
+    ax.spines["bottom"].set_color(_T["grille"])
     ax.tick_params(length=0)
 
     legende_handles = [
@@ -871,11 +952,11 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
               frameon=False, fontsize=9, ncol=2)
 
     if titre:
-        fig.text(0.01, 0.96, titre, fontsize=14, fontweight="bold", color="#1A1C2E")
+        fig.text(0.01, 0.96, titre, fontsize=14, fontweight="bold", color=_T["texte"])
     if sous_titre:
-        fig.text(0.01, 0.91, sous_titre, fontsize=10, color="#6B6F85")
+        fig.text(0.01, 0.91, sous_titre, fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -931,11 +1012,11 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     fig, ax = plt.subplots(figsize=figsize or (9, 7))
 
     if quadrants:
-        ax.axhline(quadrant_y, color="#D8DAE8", lw=1, ls="--", zorder=1)
-        ax.axvline(quadrant_x, color="#D8DAE8", lw=1, ls="--", zorder=1)
+        ax.axhline(quadrant_y, color=_T["grille"], lw=1, ls="--", zorder=1)
+        ax.axvline(quadrant_x, color=_T["grille"], lw=1, ls="--", zorder=1)
 
     ax.scatter(x, y, s=tailles_norm, color=point_colors, alpha=0.85,
-              edgecolor="white", linewidth=1.2, zorder=3)
+              edgecolor=_T["fond_neutre"], linewidth=1.2, zorder=3)
 
     if labels is not None:
         ordre = np.argsort(y)
@@ -951,16 +1032,16 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
             rayon = np.sqrt(tailles_norm[idx] / np.pi)
             ax.annotate(labels[idx], xy=(x[idx], y[idx]),
                         xytext=(rayon + 5, decalage), textcoords="offset points",
-                        fontsize=9, color="#1A1C2E", va="center")
+                        fontsize=9, color=_T["texte"], va="center")
 
     xmarge = (x.max() - x.min()) * 0.1 or 0.1
     ymarge = (y.max() - y.min()) * 0.1 or 0.1
     ax.set_xlim(x.min() - xmarge, x.max() + xmarge)
     ax.set_ylim(y.min() - ymarge, y.max() + ymarge)
 
-    ax.set_xlabel((xlabel + "  →") if xlabel else "", color="#6B6F85", fontsize=10)
-    ax.set_ylabel((ylabel + "  ↑") if ylabel else "", color="#6B6F85", fontsize=10)
-    ax.grid(axis="both", color="#D8DAE8", lw=0.6, ls="--", alpha=0.5)
+    ax.set_xlabel((xlabel + "  →") if xlabel else "", color=_T["texte_dim"], fontsize=10)
+    ax.set_ylabel((ylabel + "  ↑") if ylabel else "", color=_T["texte_dim"], fontsize=10)
+    ax.grid(axis="both", color=_T["grille"], lw=0.6, ls="--", alpha=0.5)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.tick_params(length=0)
@@ -968,7 +1049,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     fig.subplots_adjust(right=0.76)
 
     handles_couleur = [plt.scatter([], [], s=120, color=couleur_par_niveau[niv],
-                                    edgecolor="white") for niv in niveaux_couleur]
+                                    edgecolor=_T["fond_neutre"]) for niv in niveaux_couleur]
     leg1 = ax.legend(handles_couleur, [str(niv) for niv in niveaux_couleur],
                      title=label_couleur, loc="upper left", bbox_to_anchor=(1.02, 1.0),
                      frameon=False, fontsize=8.5, title_fontsize=9)
@@ -976,21 +1057,21 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
 
     valeurs_ref = sorted(set(np.round(np.linspace(taille.min(), taille.max(), 4)).astype(int).tolist()))
     handles_taille = [plt.scatter([], [], s=taille_min + (v - taille.min()) / trange * (taille_max - taille_min),
-                                   color="#A8ABBC", alpha=0.5, edgecolor="#6B6F85")
+                                   color=_T["serie_dim"], alpha=0.5, edgecolor=_T["texte_dim"])
                       for v in valeurs_ref]
     ax.legend(handles_taille, [str(v) for v in valeurs_ref],
              title=label_taille, loc="lower left", bbox_to_anchor=(1.02, 0.0),
              frameon=False, fontsize=8.5, title_fontsize=9, labelspacing=1.4)
 
     if titre:
-        ax.set_title(titre, fontsize=14, fontweight="bold", color="#1A1C2E",
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=_T["texte"],
                      pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 26), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -1041,7 +1122,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
         vmax = valeur_max or max(valeurs)
         for x0, cat, val in zip(positions, categories, valeurs):
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, taille_carre,
-                                            edgecolor="#A8ABBC", facecolor="none", lw=1.5, zorder=2))
+                                            edgecolor=_T["serie_dim"], facecolor="none", lw=1.5, zorder=2))
             h = (val / vmax) * taille_carre if vmax else 0
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, h,
                                             facecolor=couleur, edgecolor="none",
@@ -1051,7 +1132,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
                     fontsize=11, fontweight="bold", color=couleur_texte,
                     ha="left", va="bottom", zorder=4)
             ax.text(x0 + taille_carre / 2, -taille_carre * 0.12, cat,
-                    fontsize=9.5, color="#6B6F85", ha="center", va="top")
+                    fontsize=9.5, color=_T["texte_dim"], ha="center", va="top")
             sommets.append(taille_carre)
     else:  # mode == "ratio"
         if reference is not None:
@@ -1061,7 +1142,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
         for x0, cat, ratio in zip(positions, categories, ratios):
             cx, cy = x0 + taille_carre / 2, taille_carre / 2
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, taille_carre,
-                                            edgecolor="#A8ABBC", facecolor="none", lw=1.5, zorder=2))
+                                            edgecolor=_T["serie_dim"], facecolor="none", lw=1.5, zorder=2))
             cote_petit = np.sqrt(max(ratio, 0)) * taille_carre
             px0, py0 = cx - cote_petit / 2, cy - cote_petit / 2
             ax.add_patch(mpatches.Rectangle((px0, py0), cote_petit, cote_petit,
@@ -1072,7 +1153,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
                     fontsize=11, fontweight="bold", color=couleur,
                     ha="center", va="bottom", zorder=4)
             ax.text(cx, -taille_carre * 0.12, cat,
-                    fontsize=9.5, color="#6B6F85", ha="center", va="top")
+                    fontsize=9.5, color=_T["texte_dim"], ha="center", va="top")
             sommets.append(sommet + taille_carre * 0.32)
 
     ax.set_xlim(-taille_carre * 0.3, positions[-1] + taille_carre * 1.3)
@@ -1081,14 +1162,14 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
     ax.axis("off")
 
     if titre:
-        ax.set_title(titre, fontsize=14, fontweight="bold", color="#1A1C2E",
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=_T["texte"],
                      pad=18, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 8), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -1139,11 +1220,11 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
     bp = ax.boxplot(
         data, vert=not horizontal, patch_artist=True, notch=notch,
         labels=categories, widths=0.5,
-        medianprops=dict(color="#1A1C2E", linewidth=2),
-        whiskerprops=dict(color="#A8ABBC", linewidth=1.2),
-        capprops=dict(color="#A8ABBC", linewidth=1.2),
+        medianprops=dict(color=_T["texte"], linewidth=2),
+        whiskerprops=dict(color=_T["serie_dim"], linewidth=1.2),
+        capprops=dict(color=_T["serie_dim"], linewidth=1.2),
         flierprops=dict(marker="o", markerfacecolor="none",
-                        markeredgecolor="#A8ABBC", markersize=5),
+                        markeredgecolor=_T["serie_dim"], markersize=5),
     )
     for box in bp["boxes"]:
         box.set_facecolor(couleur)
@@ -1221,15 +1302,15 @@ def violin(data: list, categories: list = None, titre="", sous_titre="",
         body.set_facecolor(color)
         body.set_edgecolor(color)
         body.set_alpha(0.75)
-    vp["cmedians"].set_color("#1A1C2E")
+    vp["cmedians"].set_color(_T["texte"])
     vp["cmedians"].set_linewidth(1.5)
 
     if afficher_boxplot:
         bp = ax.boxplot(data, positions=positions, widths=0.08, patch_artist=True,
                         showfliers=False, medianprops=dict(color=PALETTE[1], linewidth=2))
         for box in bp["boxes"]:
-            box.set_facecolor("white")
-            box.set_edgecolor("#6B6F85")
+            box.set_facecolor(_T["fond_neutre"])
+            box.set_edgecolor(_T["texte_dim"])
 
     ax.set_xticks(positions)
     ax.set_xticklabels(categories)
@@ -1331,13 +1412,13 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
         for i in range(len(labels) - 1):
             y_connect = bottoms[i] + hauteurs[i]
             ax.plot([x[i] + 0.3, x[i + 1] - 0.3], [y_connect, y_connect],
-                    color="#D8DAE8", linewidth=1, linestyle="--", zorder=1)
+                    color=_T["grille"], linewidth=1, linestyle="--", zorder=1)
 
     plage = max(b + h for b, h in zip(bottoms, hauteurs)) * 0.02 or 1
     for xi, b, h, tot, val in zip(x, bottoms, hauteurs, est_total, vals_affiche):
         signe = "+" if (val > 0 and not tot) else ""
         ax.text(xi, b + h + plage, f"{signe}{val:,.0f}", ha="center", va="bottom",
-                fontsize=9.5, fontweight="bold", color="#2D2F3E")
+                fontsize=9.5, fontweight="bold", color=_T["texte"])
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=20 if len(labels) > 5 else 0, ha="right" if len(labels) > 5 else "center")
@@ -1397,7 +1478,7 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     categories_t, valeurs_t = (list(t) for t in zip(*paires)) if paires else ([], [])
     y_pos = np.arange(len(categories_t))
 
-    ax.hlines(y_pos, 0, valeurs_t, color="#D8DAE8", linewidth=1.6, zorder=2)
+    ax.hlines(y_pos, 0, valeurs_t, color=_T["grille"], linewidth=1.6, zorder=2)
     if fn_couleur is not None:
         pts_couleurs = [fn_couleur(cat, val) for cat, val in zip(categories_t, valeurs_t)]
         ax.scatter(valeurs_t, y_pos, c=pts_couleurs, s=taille_point ** 2, zorder=3)
@@ -1407,12 +1488,12 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     marge = (max(valeurs_t) * 0.03) if valeurs_t else 1
     for yi, val in zip(y_pos, valeurs_t):
         ax.text(val + marge, yi, f"{val:,.0f}", va="center", ha="left",
-                fontsize=9.5, fontweight="bold", color="#2D2F3E")
+                fontsize=9.5, fontweight="bold", color=_T["texte"])
 
     if ligne_ref is not None:
-        ax.axvline(ligne_ref, color="#6B6F85", linewidth=1.2, linestyle="--", zorder=1)
+        ax.axvline(ligne_ref, color=_T["texte_dim"], linewidth=1.2, linestyle="--", zorder=1)
         if label_ref:
-            ax.text(ligne_ref, -0.6, label_ref, fontsize=9, color="#6B6F85",
+            ax.text(ligne_ref, -0.6, label_ref, fontsize=9, color=_T["texte_dim"],
                     ha="center", va="top")
 
     ax.set_yticks(y_pos)
@@ -1490,7 +1571,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
             alpha, lw, z = 0.9, 1.8, 3
 
         ax.plot([0, 1], [vg, vd], color=couleur, alpha=alpha, linewidth=lw, zorder=z,
-                marker="o", markersize=6, markerfacecolor=couleur, markeredgecolor="white")
+                marker="o", markersize=6, markerfacecolor=couleur, markeredgecolor=_T["fond_neutre"])
 
     toutes_valeurs = list(valeurs_gauche) + list(valeurs_droite)
     plage = (max(toutes_valeurs) - min(toutes_valeurs)) or 1
@@ -1508,7 +1589,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
                 val_str = f"{cote_valeurs[i]:,.0f}"
                 texte = f"{texte}  ({val_str})" if ha == "left" else f"({val_str})  {texte}"
             ax.text(x_pos, decales[i], texte, ha=ha, va="center", fontsize=9.5,
-                    color="#1A1C2E")
+                    color=_T["texte"])
 
     _placer_etiquettes(valeurs_gauche, -0.05, "right")
     _placer_etiquettes(valeurs_droite, 1.05, "left")
@@ -1617,7 +1698,7 @@ def facet(data, x: str = None, y: str = None, par: str = None,
         elif type_graphique == "histogramme":
             fn(data=y_vals, ax=ax_i, **kwargs)
 
-        ax_i.set_title(str(groupe), fontsize=10, fontweight="bold", color="#1A1C2E")
+        ax_i.set_title(str(groupe), fontsize=10, fontweight="bold", color=_T["texte"])
         if col != 0:
             ax_i.set_ylabel("")
         if not partager_legende:
@@ -1632,11 +1713,11 @@ def facet(data, x: str = None, y: str = None, par: str = None,
             a.set_ylim(min(ymins), max(ymaxs))
 
     if titre:
-        fig.suptitle(titre, fontsize=15, fontweight="bold", color="#1A1C2E", y=1.02)
+        fig.suptitle(titre, fontsize=15, fontweight="bold", color=_T["texte"], y=1.02)
     if sous_titre:
-        fig.text(0.01, 0.965, sous_titre, fontsize=10, color="#6B6F85")
+        fig.text(0.01, 0.965, sous_titre, fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     fig.tight_layout()
     return fig, np.array(axes[:n])
@@ -1706,5 +1787,5 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None
 
     if titre_global:
         fig.suptitle(titre_global, fontsize=18, fontweight="bold",
-                     color="#1A1C2E", y=1.02)
+                     color=_T["texte"], y=1.02)
     return fig, np.array(axes[:n])

@@ -154,5 +154,35 @@ def test_fn_couleur_priorite_sur_couleur():
     plt.close("all")
 
 
+# ── Tests système de thèmes ───────────────────────────────────────────────────
+
+def test_theme_dark():
+    """init(theme='dark') bascule _T et les rcParams."""
+    import matplotlib.pyplot as plt
+    import beau_graphique as bg
+    bg.init(theme="dark")
+    assert bg._T["bg"] == "#0D1B2A"
+    assert plt.rcParams["figure.facecolor"] == "#0D1B2A"
+    bg.init()  # remettre en light pour les tests suivants
+
+
+def test_theme_personnalise():
+    """Un dict partiel est fusionné sur le thème light par défaut."""
+    import beau_graphique as bg
+    bg.init(theme={"bg": "#001122", "texte": "#FFFFFF"})
+    assert bg._T["bg"] == "#001122"
+    assert bg._T["texte"] == "#FFFFFF"
+    assert bg._T["grille"] == bg.THEMES["light"]["grille"]  # hérité
+    bg.init()  # reset
+
+
+def test_theme_inconnu_leve_erreur():
+    """Un nom de thème inconnu doit lever ValueError."""
+    import beau_graphique as bg
+    with pytest.raises(ValueError, match="Thème inconnu"):
+        bg.init(theme="foobar")
+    bg.init()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
