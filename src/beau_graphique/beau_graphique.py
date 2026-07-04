@@ -263,6 +263,16 @@ _COULEUR_HAUT   = "#2DC653"   # vert — au-dessus du seuil
 _COULEUR_BAS    = "#E63946"   # rouge — en-dessous du seuil
 _COULEUR_NEUTRE = "#B0B3C6"   # gris — exactement égal au seuil
 
+# ── Styles de tuiles KPI ────────────────────────────────────────────────────
+# Chaque preset définit trois flags booléens. Passez un dict à style_kpi=
+# dans layout_rapport() pour surcharger n'importe quelle combinaison.
+_STYLE_KPI_PRESETS: dict = {
+    "minimal": {"border": False, "accent_bar": False, "bg_fill": False},
+    "simple":  {"border": True,  "accent_bar": False, "bg_fill": False},
+    "accent":  {"border": False, "accent_bar": True,  "bg_fill": False},
+    "filled":  {"border": False, "accent_bar": False, "bg_fill": True},
+}
+
 
 def colorier_si(seuil, couleur_haut=None, couleur_bas=None, couleur_egal=None):
     """
@@ -1795,56 +1805,104 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None
 # Layout rapport / slide
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _dessiner_kpi(ax, kpi: dict) -> None:
+def _resoudre_style_kpi(style_kpi) -> dict:
+    """Convertit style_kpi= (preset str ou dict brut) en dict de flags booléens."""
+    if style_kpi is None:
+        return dict(_STYLE_KPI_PRESETS["accent"])
+    if isinstance(style_kpi, str):
+        if style_kpi not in _STYLE_KPI_PRESETS:
+            raise ValueError(
+                f"style_kpi inconnu : {style_kpi!r}. "
+                f"Valides : {list(_STYLE_KPI_PRESETS)} — ou passez un dict."
+            )
+        return dict(_STYLE_KPI_PRESETS[style_kpi])
+    if isinstance(style_kpi, dict):
+        result = dict(_STYLE_KPI_PRESETS["accent"])
+        result.update(style_kpi)
+        return result
+    return dict(_STYLE_KPI_PRESETS["accent"])
+
+
+def _dessiner_kpi(ax, kpi: dict, style: dict) -> None:
     """
     Dessine une tuile KPI dans l'axe fourni.
 
     Clés reconnues dans *kpi*
     -------------------------
-    label   : libellé de la métrique (affiché en petites capitales)
+    label   : libellé de la métrique (affiché en majuscules)
     valeur  : valeur principale déjà formatée (ex: ``"1,24 M"`` ou ``"23 %"``)
     delta   : variation (ex: ``"+12 %"``, ``"−2 pts"``) — optionnel
     positif : ``True`` → delta vert, ``False`` → delta rouge  (défaut ``True``)
     icone   : caractère ou emoji placé avant la valeur (optionnel)
+    couleur : couleur d'accent hex — barre ou teinte de fond (défaut PALETTE[0])
+
+    Clés reconnues dans *style*
+    ---------------------------
+    border     : bool — bordure fine autour de la tuile
+    accent_bar : bool — barre colorée verticale sur le bord gauche
+    bg_fill    : bool — fond légèrement teinté avec la couleur d'accent
     """
-    ax.set_facecolor(_T["bg"])
+    couleur_accent = kpi.get("couleur", PALETTE[0])
+    positif        = kpi.get("positif", True)
+    couleur_delta  = "#2DC653" if positif else "#E63946"
+
+    # ── Fond ──────────────────────────────────────────────────────────────
+    if style.get("bg_fill"):
+        h = couleur_accent.lstrip("#")
+        r = int(h[0:2], 16) / 255
+        g = int(h[2:4], 16) / 255
+        b = int(h[4:6], 16) / 255
+        ax.set_facecolor((r, g, b, 0.10))
+    else:
+        ax.set_facecolor(_T["bg"])
+
+    # ── Bordure ────────────────────────────────────────────────────────────
     for sp in ax.spines.values():
-        sp.set_visible(True)
-        sp.set_linewidth(0.8)
-        sp.set_edgecolor(_T["grille"])
+        sp.set_visible(bool(style.get("border")))
+        if style.get("border"):
+            sp.set_linewidth(0.8)
+            sp.set_edgecolor(_T["grille"])
+
     ax.set_xticks([])
     ax.set_yticks([])
 
-    label   = str(kpi.get("label",   ""))
-    valeur  = str(kpi.get("valeur",  "—"))
-    delta   = str(kpi.get("delta",   ""))
-    positif = kpi.get("positif", True)
-    icone   = str(kpi.get("icone",   ""))
+    # ── Barre d'accent verticale (côté gauche) ─────────────────────────────
+    x_text = 0.5
+    if style.get("accent_bar"):
+        bar = mpatches.Rectangle(
+            (0.035, 0.10), 0.055, 0.80,
+            transform=ax.transAxes, clip_on=False,
+            facecolor=couleur_accent, edgecolor="none", zorder=5,
+        )
+        ax.add_patch(bar)
+        x_text = 0.56   # centre de l'espace restant (0.09 → 1.0)
 
+    # ── Textes ─────────────────────────────────────────────────────────────
+    label      = str(kpi.get("label",  ""))
+    valeur     = str(kpi.get("valeur", "—"))
+    delta      = str(kpi.get("delta",  ""))
+    icone      = str(kpi.get("icone",  ""))
     txt_valeur = f"{icone} {valeur}".strip() if icone else valeur
 
-    # Label (en haut, petites capitales visuelles)
     if label:
-        ax.text(0.5, 0.84, label.upper(), transform=ax.transAxes,
-                fontsize=7.5, color=_T["texte_dim"], ha="center", va="center",
+        ax.text(x_text, 0.82, label.upper(), transform=ax.transAxes,
+                fontsize=8, color=_T["texte_dim"], ha="center", va="center",
                 fontweight="bold")
 
-    # Valeur principale
-    ax.text(0.5, 0.50, txt_valeur, transform=ax.transAxes,
-            fontsize=21, color=_T["texte"], ha="center", va="center",
+    ax.text(x_text, 0.50, txt_valeur, transform=ax.transAxes,
+            fontsize=22, color=_T["texte"], ha="center", va="center",
             fontweight="bold")
 
-    # Delta avec flèche colorée
     if delta:
         signe = "▲" if positif else "▼"
-        couleur_delta = "#2DC653" if positif else "#E63946"
-        ax.text(0.5, 0.14, f"{signe} {delta}", transform=ax.transAxes,
+        ax.text(x_text, 0.16, f"{signe} {delta}", transform=ax.transAxes,
                 fontsize=9.5, color=couleur_delta, ha="center", va="center",
                 fontweight="bold")
 
 
 def layout_rapport(titre="", sous_titre="", note="", kpis=None,
-                   n_graphiques=1, figsize=None, format="slide"):
+                   n_graphiques=1, figsize=None, format="slide",
+                   style_kpi="accent"):
     """
     Gabarit slide/rapport prêt à l'emploi : titre, tuiles KPI et zone(s) graphique.
 
@@ -1864,6 +1922,20 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
     n_graphiques : Nombre de zones graphique (1, 2 ou 3).
     figsize      : Taille de figure explicite — prioritaire sur *format*.
     format       : Preset de taille (``"slide"``, ``"a4"``, ``"large"``…).
+    style_kpi    : Style des tuiles KPI. Preset str ou dict de flags bruts.
+
+                   Presets disponibles :
+
+                   * ``"accent"``  (défaut) — barre colorée à gauche, fond neutre
+                   * ``"filled"``  — fond légèrement teinté avec la couleur d'accent
+                   * ``"simple"``  — bordure fine, pas de décoration
+                   * ``"minimal"`` — texte seul, aucune décoration
+
+                   Dict brut (toutes les clés sont optionnelles) ::
+
+                       style_kpi={"border": True, "accent_bar": False, "bg_fill": True}
+
+                   La couleur d'accent provient de ``kpi["couleur"]`` (par défaut PALETTE[0]).
 
     Returns
     -------
@@ -1893,6 +1965,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
     if kpis is None:
         kpis = []
 
+    style_kpi_resolu = _resoudre_style_kpi(style_kpi)
     n_kpis = len(kpis)
     n_graphiques = max(1, min(int(n_graphiques), 3))
 
@@ -1948,7 +2021,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
                 c0 = title_cols + i * largeur
                 c1 = title_cols + (i + 1) * largeur if i < n_kpis - 1 else NCOLS
                 ax_k = fig.add_subplot(gs[0, c0:c1])
-                _dessiner_kpi(ax_k, kpi)
+                _dessiner_kpi(ax_k, kpi, style_kpi_resolu)
                 axes_kpis.append(ax_k)
 
     # ── Axes graphiques ───────────────────────────────────────────────────
@@ -1967,3 +2040,305 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
                  style="italic", transform=fig.transFigure)
 
     return fig, {"graphiques": axes_charts, "kpis": axes_kpis}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Graphiques de classement et de distribution
+# ══════════════════════════════════════════════════════════════════════════════
+
+def bump(periodes, series: dict, titre="", sous_titre="", note="",
+         figsize=None, format=None, ax=None,
+         couleur=None, couleurs_multiples=None,
+         montrer_valeurs=True):
+    """
+    Graphique de classement (bump chart) — évolution des positions dans le temps.
+
+    Les lignes montrent comment chaque entité progresse ou recule en termes
+    de rang d'une période à l'autre. Le rang 1 est affiché en haut.
+
+    Parameters
+    ----------
+    periodes          : Liste des périodes (axe X) — ex: ``["Q1", "Q2", "Q3", "Q4"]``.
+    series            : Dict ``{nom: [rang_t0, rang_t1, ...]}`` — rang de chaque
+                        entité à chaque période (entier, 1 = premier).
+    titre, sous_titre : Textes du graphique.
+    note              : Note de bas de page.
+    figsize, format   : Taille de figure.
+    ax                : Axe matplotlib externe (optionnel).
+    couleur           : Couleur uniforme pour toutes les séries.
+    couleurs_multiples: Liste de couleurs hex, une par série.
+    montrer_valeurs   : Afficher le rang dans chaque marqueur (défaut ``True``).
+
+    Returns
+    -------
+    ``(fig, ax)``
+
+    Exemple
+    -------
+    >>> bump(
+    ...     periodes=["2021", "2022", "2023", "2024"],
+    ...     series={
+    ...         "Orange":  [1, 2, 1, 1],
+    ...         "MTN":     [2, 1, 2, 3],
+    ...         "Camtel":  [3, 3, 3, 2],
+    ...     },
+    ...     titre="Classement des opérateurs",
+    ... )
+    """
+    noms     = list(series.keys())
+    couleurs = _couleurs_auto(noms, couleur, couleurs_multiples)
+    if isinstance(couleurs, str):
+        couleurs = [couleurs] * len(noms)
+
+    fig, ax = _new_fig(figsize, ax, format)
+    fig.patch.set_facecolor(_T["bg"])
+    ax.set_facecolor(_T["bg"])
+
+    x        = np.arange(len(periodes), dtype=float)
+    max_rang = max(max(rangs) for rangs in series.values())
+
+    for i, (nom, rangs) in enumerate(series.items()):
+        y = np.array(rangs, dtype=float)
+        c = couleurs[i % len(couleurs)] if isinstance(couleurs, list) else couleurs
+
+        # Courbe lissée (scipy si disponible, sinon linéaire)
+        if len(x) >= 4:
+            try:
+                from scipy.interpolate import make_interp_spline
+                x_fine = np.linspace(x[0], x[-1], 400)
+                spl    = make_interp_spline(x, y, k=3)
+                ax.plot(x_fine, spl(x_fine), color=c, lw=2.5, alpha=0.9, zorder=2)
+            except ImportError:
+                ax.plot(x, y, color=c, lw=2.5, alpha=0.9, zorder=2)
+        else:
+            ax.plot(x, y, color=c, lw=2.5, alpha=0.9, zorder=2)
+
+        # Marqueurs circulaires
+        ax.scatter(x, y, s=260, color=c, zorder=4,
+                   edgecolors=_T["fond_neutre"], linewidths=2)
+
+        if montrer_valeurs:
+            for xi, yi in zip(x, y):
+                ax.text(float(xi), float(yi), str(int(yi)),
+                        ha="center", va="center",
+                        fontsize=8, color=_T["fond_neutre"],
+                        fontweight="bold", zorder=5)
+
+        # Étiquettes gauche et droite
+        ax.text(x[0] - 0.45, y[0], nom, ha="right", va="center",
+                fontsize=9, color=c, fontweight="bold")
+        ax.text(x[-1] + 0.45, y[-1], nom, ha="left", va="center",
+                fontsize=9, color=c, fontweight="bold")
+
+    # Axe Y : rang 1 en haut
+    ax.set_ylim(max_rang + 0.7, 0.3)
+    ax.set_xlim(x[0] - 1.5, x[-1] + 1.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels(periodes, fontsize=10, color=_T["texte_dim"])
+    ax.set_yticks(range(1, max_rang + 1))
+    ax.set_yticklabels(
+        [f"#{r}" for r in range(1, max_rang + 1)],
+        fontsize=9, color=_T["texte_dim"],
+    )
+
+    # Grille horizontale par niveau de rang
+    ax.yaxis.grid(True, color=_T["grille"], lw=0.7, linestyle="--")
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+
+    for sp in ["top", "right", "left"]:
+        ax.spines[sp].set_visible(False)
+    ax.spines["bottom"].set_color(_T["grille"])
+    ax.tick_params(length=0)
+
+    return _finalize(ax, titre, sous_titre, note=note, legende=False, fig=fig)
+
+
+def radar(categories, series: dict, titre="", sous_titre="", note="",
+          figsize=None, format=None,
+          vmin=0, vmax=None,
+          couleur=None, couleurs_multiples=None,
+          remplir=True, alpha_remplissage=0.15):
+    """
+    Graphique radar (spider / toile d'araignée) — profil multi-dimensionnel.
+
+    Idéal pour comparer plusieurs entités selon un ensemble de critères
+    qualitatifs ou quantitatifs sur la même échelle.
+
+    Parameters
+    ----------
+    categories        : Liste des dimensions évaluées.
+    series            : Dict ``{nom: [val_cat1, val_cat2, ...]}`` — une valeur
+                        par catégorie, dans le même ordre.
+    titre, sous_titre : Textes du graphique.
+    note              : Note de bas de page.
+    figsize, format   : Taille de figure.
+    vmin, vmax        : Limites radiales (défaut : 0, max des valeurs × 1.05).
+    couleur           : Couleur uniforme pour toutes les séries.
+    couleurs_multiples: Couleurs hex explicites, une par série.
+    remplir           : Remplir les polygones avec transparence.
+    alpha_remplissage : Transparence du remplissage (0–1, défaut 0.15).
+
+    Returns
+    -------
+    ``(fig, ax)``  — *ax* est un axe polaire.
+
+    Exemple
+    -------
+    >>> radar(
+    ...     categories=["Vitesse", "Force", "Endurance", "Précision", "Agilité"],
+    ...     series={
+    ...         "Joueur A": [8, 7, 9, 6, 9],
+    ...         "Joueur B": [6, 9, 7, 8, 7],
+    ...     },
+    ...     titre="Comparaison des profils athlétiques",
+    ... )
+    """
+    n      = len(categories)
+    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    angles_closed = np.append(angles, angles[0])
+
+    noms     = list(series.keys())
+    couleurs = _couleurs_auto(noms, couleur, couleurs_multiples)
+    if isinstance(couleurs, str):
+        couleurs = [couleurs] * len(noms)
+
+    fig_size = _resoudre_figsize(figsize, format) or (7, 7)
+    fig      = plt.figure(figsize=fig_size)
+    fig.patch.set_facecolor(_T["bg"])
+    ax = fig.add_subplot(111, projection="polar")
+    ax.set_facecolor(_T["bg"])
+
+    all_vals = [v for vals in series.values() for v in vals]
+    if vmax is None:
+        vmax = max(all_vals) * 1.05 if all_vals else 10
+
+    for i, (nom, valeurs) in enumerate(series.items()):
+        c = couleurs[i % len(couleurs)] if isinstance(couleurs, list) else couleurs
+        vals_closed = np.append(np.array(valeurs, dtype=float), valeurs[0])
+        ax.plot(angles_closed, vals_closed, color=c, lw=2, label=nom, zorder=3)
+        if remplir:
+            ax.fill(angles_closed, vals_closed, color=c, alpha=alpha_remplissage, zorder=2)
+
+    ax.set_xticks(angles)
+    ax.set_xticklabels(categories, fontsize=9.5, color=_T["texte"])
+    ax.set_ylim(vmin, vmax)
+    ax.yaxis.grid(True, color=_T["grille"], lw=0.6, linestyle="--")
+    ax.xaxis.grid(True, color=_T["grille"], lw=0.6)
+    ax.spines["polar"].set_color(_T["grille"])
+    ax.tick_params(axis="y", colors=_T["texte_dim"], labelsize=7.5)
+    ax.set_rlabel_position(45)
+
+    if len(noms) > 1:
+        ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15),
+                  framealpha=0, labelcolor=_T["texte"], fontsize=9)
+
+    if titre:
+        fig.suptitle(titre, fontsize=14, fontweight="bold",
+                     color=_T["texte"], y=1.03)
+    if sous_titre:
+        fig.text(0.5, -0.01, sous_titre, ha="center",
+                 fontsize=9, color=_T["texte_dim"])
+    if note:
+        fig.text(0.01, -0.04, note, fontsize=8, color=_T["texte_dim"],
+                 style="italic")
+    fig.tight_layout()
+    return fig, ax
+
+
+def ridgeline(series: dict, titre="", sous_titre="", note="",
+              figsize=None, format=None,
+              couleur=None, couleurs_multiples=None,
+              alpha=0.75, chevauchement=0.7):
+    """
+    Graphique ridgeline (Joy Plot) — distributions superposées décalées.
+
+    Visualise et compare la forme de la distribution de plusieurs groupes
+    en les décalant verticalement. Chaque courbe est une estimation de
+    densité (KDE) ou un histogramme lissé.
+
+    Parameters
+    ----------
+    series            : Dict ``{nom: [valeurs...]}`` — données brutes par groupe,
+                        dans l'ordre d'affichage (premier = haut).
+    titre, sous_titre : Textes du graphique.
+    note              : Note de bas de page.
+    figsize, format   : Taille de figure.
+    couleur           : Couleur uniforme pour tous les groupes.
+    couleurs_multiples: Couleurs hex explicites, une par groupe.
+    alpha             : Transparence du remplissage (0–1, défaut 0.75).
+    chevauchement     : Hauteur maximale relative de chaque courbe —
+                        0.5 = pas de chevauchement, > 1 = fort chevauchement
+                        (défaut 0.7).
+
+    Returns
+    -------
+    ``(fig, ax)``
+
+    Notes
+    -----
+    Utilise ``scipy.stats.gaussian_kde`` si scipy est installé.
+    Sinon, recourt à un histogramme numpy lissé par interpolation.
+
+    Exemple
+    -------
+    >>> import numpy as np
+    >>> ridgeline(
+    ...     series={
+    ...         "Groupe A": np.random.normal(5, 1, 300).tolist(),
+    ...         "Groupe B": np.random.normal(7, 1.5, 300).tolist(),
+    ...         "Groupe C": np.random.normal(4, 2, 300).tolist(),
+    ...     },
+    ...     titre="Distribution des scores par groupe",
+    ... )
+    """
+    noms     = list(series.keys())
+    n        = len(noms)
+    couleurs = _couleurs_auto(noms, couleur, couleurs_multiples)
+    if isinstance(couleurs, str):
+        couleurs = [couleurs] * n
+
+    fig_size = _resoudre_figsize(figsize, format) or (10, max(4, n * 1.4))
+    fig, ax  = plt.subplots(figsize=fig_size)
+    fig.patch.set_facecolor(_T["bg"])
+    ax.set_facecolor(_T["bg"])
+
+    all_vals = np.concatenate([np.asarray(v, dtype=float) for v in series.values()])
+    xmin, xmax = all_vals.min(), all_vals.max()
+    xpad    = (xmax - xmin) * 0.12
+    x_range = np.linspace(xmin - xpad, xmax + xpad, 500)
+
+    for i, nom in enumerate(reversed(noms)):
+        idx  = n - 1 - i
+        vals = np.asarray(series[nom], dtype=float)
+        c    = couleurs[idx % len(couleurs)] if isinstance(couleurs, list) else couleurs
+
+        try:
+            from scipy.stats import gaussian_kde
+            density = gaussian_kde(vals, bw_method="scott")(x_range)
+        except ImportError:
+            counts, bins = np.histogram(vals, bins=40, density=True)
+            density = np.interp(x_range, (bins[:-1] + bins[1:]) / 2, counts)
+
+        if density.max() > 0:
+            density = density / density.max() * chevauchement
+
+        y_base = float(i)
+        ax.fill_between(x_range, y_base, y_base + density,
+                         color=c, alpha=alpha, lw=0, zorder=n - i)
+        ax.plot(x_range, y_base + density, color=c, lw=1.5, zorder=n - i + 1)
+        ax.axhline(y_base, color=_T["grille"], lw=0.6, zorder=1)
+
+    ax.set_yticks(range(n))
+    ax.set_yticklabels(list(reversed(noms)), fontsize=9.5, color=_T["texte"])
+    ax.set_ylim(-0.15, n - 1 + chevauchement + 0.2)
+
+    for sp in ["top", "right", "left"]:
+        ax.spines[sp].set_visible(False)
+    ax.spines["bottom"].set_color(_T["grille"])
+    ax.tick_params(axis="x", colors=_T["texte_dim"], length=0)
+    ax.tick_params(axis="y", length=0)
+    ax.xaxis.grid(False)
+    ax.yaxis.grid(False)
+
+    return _finalize(ax, titre, sous_titre, note=note, legende=False, fig=fig)
