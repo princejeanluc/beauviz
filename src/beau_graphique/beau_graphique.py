@@ -1789,3 +1789,181 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None
         fig.suptitle(titre_global, fontsize=18, fontweight="bold",
                      color=_T["texte"], y=1.02)
     return fig, np.array(axes[:n])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Layout rapport / slide
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _dessiner_kpi(ax, kpi: dict) -> None:
+    """
+    Dessine une tuile KPI dans l'axe fourni.
+
+    Clés reconnues dans *kpi*
+    -------------------------
+    label   : libellé de la métrique (affiché en petites capitales)
+    valeur  : valeur principale déjà formatée (ex: ``"1,24 M"`` ou ``"23 %"``)
+    delta   : variation (ex: ``"+12 %"``, ``"−2 pts"``) — optionnel
+    positif : ``True`` → delta vert, ``False`` → delta rouge  (défaut ``True``)
+    icone   : caractère ou emoji placé avant la valeur (optionnel)
+    """
+    ax.set_facecolor(_T["bg"])
+    for sp in ax.spines.values():
+        sp.set_visible(True)
+        sp.set_linewidth(0.8)
+        sp.set_edgecolor(_T["grille"])
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    label   = str(kpi.get("label",   ""))
+    valeur  = str(kpi.get("valeur",  "—"))
+    delta   = str(kpi.get("delta",   ""))
+    positif = kpi.get("positif", True)
+    icone   = str(kpi.get("icone",   ""))
+
+    txt_valeur = f"{icone} {valeur}".strip() if icone else valeur
+
+    # Label (en haut, petites capitales visuelles)
+    if label:
+        ax.text(0.5, 0.84, label.upper(), transform=ax.transAxes,
+                fontsize=7.5, color=_T["texte_dim"], ha="center", va="center",
+                fontweight="bold")
+
+    # Valeur principale
+    ax.text(0.5, 0.50, txt_valeur, transform=ax.transAxes,
+            fontsize=21, color=_T["texte"], ha="center", va="center",
+            fontweight="bold")
+
+    # Delta avec flèche colorée
+    if delta:
+        signe = "▲" if positif else "▼"
+        couleur_delta = "#2DC653" if positif else "#E63946"
+        ax.text(0.5, 0.14, f"{signe} {delta}", transform=ax.transAxes,
+                fontsize=9.5, color=couleur_delta, ha="center", va="center",
+                fontweight="bold")
+
+
+def layout_rapport(titre="", sous_titre="", note="", kpis=None,
+                   n_graphiques=1, figsize=None, format="slide"):
+    """
+    Gabarit slide/rapport prêt à l'emploi : titre, tuiles KPI et zone(s) graphique.
+
+    Le layout est organisé en deux rangées sur une grille de 12 colonnes :
+
+    * **Rangée 0** (≈ 25 % de hauteur) — titre à gauche + tuiles KPI à droite.
+    * **Rangée 1** (≈ 75 % de hauteur) — un ou plusieurs axes graphiques.
+
+    Parameters
+    ----------
+    titre        : Titre principal de la page.
+    sous_titre   : Ligne descriptive sous le titre.
+    note         : Note de bas de page (source, date…).
+    kpis         : Liste de dicts décrivant les tuiles métriques.
+                   Chaque dict peut contenir :
+                   ``label``, ``valeur``, ``delta``, ``positif``, ``icone``.
+    n_graphiques : Nombre de zones graphique (1, 2 ou 3).
+    figsize      : Taille de figure explicite — prioritaire sur *format*.
+    format       : Preset de taille (``"slide"``, ``"a4"``, ``"large"``…).
+
+    Returns
+    -------
+    ``(fig, zones)`` où *zones* est un dict :
+
+    * ``zones["graphiques"]`` — liste d'axes prêts à recevoir vos graphiques
+      via le paramètre ``ax=``.
+    * ``zones["kpis"]`` — liste des axes tuile (pour surcharge éventuelle).
+
+    Exemple
+    -------
+    >>> fig, zones = layout_rapport(
+    ...     titre="Performance commerciale Q4 2024",
+    ...     sous_titre="Résultats consolidés — 4 villes",
+    ...     kpis=[
+    ...         {"label": "Ventes",   "valeur": "1,24 M", "delta": "+12 %", "positif": True},
+    ...         {"label": "Clients",  "valeur": "4 832",  "delta": "+5 %",  "positif": True},
+    ...         {"label": "Marge",    "valeur": "23 %",   "delta": "−2 pts","positif": False},
+    ...     ],
+    ...     n_graphiques=2,
+    ...     format="slide",
+    ... )
+    >>> barres(mois, ventes, titre="Ventes par mois", ax=zones["graphiques"][0])
+    >>> ligne(mois, {"Douala": v1, "Yaoundé": v2}, ax=zones["graphiques"][1])
+    >>> plt.show()
+    """
+    if kpis is None:
+        kpis = []
+
+    n_kpis = len(kpis)
+    n_graphiques = max(1, min(int(n_graphiques), 3))
+
+    NCOLS = 12
+    # 2 colonnes par tuile KPI (max 8 colonnes pour les KPIs)
+    kpi_cols  = min(n_kpis * 2, 8)
+    title_cols = NCOLS - kpi_cols  # colonnes restantes pour le titre
+
+    fig_size = _resoudre_figsize(figsize, format) or FORMATS["slide"]
+    fig = plt.figure(figsize=fig_size)
+    fig.patch.set_facecolor(_T["bg"])
+
+    has_header = bool(titre or sous_titre or n_kpis > 0)
+
+    if has_header:
+        gs = fig.add_gridspec(
+            2, NCOLS,
+            height_ratios=[1.2, 4.2],
+            hspace=0.08, wspace=0.06,
+            left=0.03, right=0.97,
+            top=0.97, bottom=0.05,
+        )
+        chart_row = 1
+    else:
+        gs = fig.add_gridspec(
+            1, NCOLS,
+            hspace=0.0, wspace=0.06,
+            left=0.03, right=0.97,
+            top=0.97, bottom=0.05,
+        )
+        chart_row = 0
+
+    # ── Zone titre ────────────────────────────────────────────────────────
+    axes_kpis = []
+    if has_header:
+        ax_h = fig.add_subplot(gs[0, :title_cols])
+        ax_h.set_facecolor(_T["bg"])
+        ax_h.set_axis_off()
+
+        if titre:
+            ax_h.text(0.0, 0.88, titre, transform=ax_h.transAxes,
+                      fontsize=17, fontweight="bold", color=_T["texte"],
+                      va="top", ha="left")
+        if sous_titre:
+            ax_h.text(0.0, 0.28, sous_titre, transform=ax_h.transAxes,
+                      fontsize=10, color=_T["texte_dim"],
+                      va="center", ha="left")
+
+        # ── Tuiles KPI ────────────────────────────────────────────────────
+        if n_kpis > 0:
+            largeur = kpi_cols // n_kpis
+            for i, kpi in enumerate(kpis):
+                c0 = title_cols + i * largeur
+                c1 = title_cols + (i + 1) * largeur if i < n_kpis - 1 else NCOLS
+                ax_k = fig.add_subplot(gs[0, c0:c1])
+                _dessiner_kpi(ax_k, kpi)
+                axes_kpis.append(ax_k)
+
+    # ── Axes graphiques ───────────────────────────────────────────────────
+    chart_largeur = NCOLS // n_graphiques
+    axes_charts = []
+    for j in range(n_graphiques):
+        c0 = j * chart_largeur
+        c1 = (j + 1) * chart_largeur if j < n_graphiques - 1 else NCOLS
+        ax_c = fig.add_subplot(gs[chart_row, c0:c1])
+        ax_c.set_facecolor(_T["bg"])
+        axes_charts.append(ax_c)
+
+    # ── Note de bas de page ───────────────────────────────────────────────
+    if note:
+        fig.text(0.03, 0.01, note, fontsize=8, color=_T["texte_dim"],
+                 style="italic", transform=fig.transFigure)
+
+    return fig, {"graphiques": axes_charts, "kpis": axes_kpis}
