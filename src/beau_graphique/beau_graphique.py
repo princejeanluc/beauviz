@@ -884,64 +884,106 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
     """
     Compare N dimensions (colonnes) entre deux périodes sur un axe Y commun.
     Chaque colonne affiche un point creux (avant) et un point plein (après)
-    reliés par une flèche — idéal pour une progression multi-critères.
+    reliés par une fine flèche — idéal pour une progression multi-critères
+    (style McKinsey Global Institute).
 
     Parameters
     ----------
-    colonnes     : dict {"Nom colonne": (valeur_avant, valeur_apres), ...}
-    descriptions : dict {"Nom colonne": "texte descriptif", ...} — optionnel
-    label_avant  : étiquette de légende pour le point creux
-    label_apres  : étiquette de légende pour le point plein
-    couleur      : couleur des points/flèches (défaut : PALETTE[0])
+    colonnes     : dict ``{"Nom colonne": (valeur_avant, valeur_apres), ...}``
+    descriptions : dict ``{"Nom colonne": "texte descriptif court", ...}`` — optionnel.
+                   Affiché en gris sous le nom de la colonne.
+    label_avant  : étiquette de légende pour le point creux (défaut ``"Avant"``).
+    label_apres  : étiquette de légende pour le point plein (défaut ``"Après"``).
+    couleur      : couleur des points (défaut : ``PALETTE[0]``).
+    titre        : Titre en gras au-dessus du graphique.
+    sous_titre   : Sous-titre plus léger (ex: ``"Score, par vecteur (0 = faible ; 1 = élevé)"``).
+    note         : Note de bas de page (source, remarque…).
+    figsize      : Taille de figure explicite — prioritaire sur *format*.
+    format       : Preset de taille (``"slide"``, ``"a4"``…).
+
+    Returns
+    -------
+    ``(fig, ax)``
 
     Exemple
     -------
     >>> dot_plot_comparatif(
-    ...     colonnes={"News": (0.05, 0.15), "Searches": (0.08, 0.19)},
+    ...     colonnes={
+    ...         "News":     (0.08, 0.27),
+    ...         "Searches": (0.07, 0.09),
+    ...         "Research": (0.05, 0.08),
+    ...     },
+    ...     descriptions={
+    ...         "News":     "Mentions presse liées à la tendance",
+    ...         "Searches": "Requêtes moteurs de recherche",
+    ...         "Research": "Publications scientifiques",
+    ...     },
     ...     label_avant="2020", label_apres="2024",
     ...     titre="Score par vecteur (0 = faible ; 1 = élevé)",
     ... )
     """
-    couleur = couleur or PALETTE[0]
-    figsize = _resoudre_figsize(figsize, format)
+    couleur      = couleur or PALETTE[0]
     descriptions = descriptions or {}
-    noms = list(colonnes.keys())
-    n = len(noms)
+    noms         = list(colonnes.keys())
+    n            = len(noms)
+    has_desc     = any(nom in descriptions for nom in noms)
 
-    fig, ax = plt.subplots(figsize=figsize or (n * 2.2, 6))
-    fig.subplots_adjust(top=0.68, bottom=0.1)
+    # ── Dimensions ─────────────────────────────────────────────────────────
+    # Zone en-têtes : 22 % sans descriptions, 30 % avec descriptions
+    top_adj = 0.70 if has_desc else 0.80
+    fig_w   = max(8, n * 2.8)
+    fig, ax = plt.subplots(figsize=_resoudre_figsize(figsize, format) or (fig_w, 6.5))
+    fig.patch.set_facecolor(_T["bg"])
+    ax.set_facecolor(_T["bg"])
+    fig.subplots_adjust(top=top_adj, bottom=0.08, left=0.10, right=0.97)
 
+    # ── Plage Y — inclure 0 systématiquement ───────────────────────────────
     valeurs_toutes = [v for paire in colonnes.values() for v in paire]
-    ymin, ymax = min(valeurs_toutes), max(valeurs_toutes)
-    marge = (ymax - ymin) * 0.18 or 0.1
-    ax.set_ylim(ymin - marge, ymax + marge)
+    ymin_d, ymax_d = min(valeurs_toutes), max(valeurs_toutes)
+    ymin_eff = min(0.0, ymin_d)
+    marge    = (ymax_d - ymin_eff) * 0.15 or 0.1
+    ax.set_ylim(ymin_eff, ymax_d + marge)
 
-    trans = ax.get_xaxis_transform()  # x en données, y en fraction d'axes
+    # Grille horizontale dashed — ancre le regard sur l'axe Y
+    ax.yaxis.grid(True, color=_T["grille"], lw=0.5, linestyle="--", zorder=0)
+    ax.set_axisbelow(True)
+
+    trans = ax.get_xaxis_transform()   # x données, y fraction axes
 
     for i, nom in enumerate(noms):
         avant, apres = colonnes[nom]
 
+        # Séparateur vertical entre colonnes
         if i > 0:
-            ax.axvline(i - 0.5, color=_T["grille"], lw=0.5, zorder=0)
+            ax.axvline(i - 0.5, color=_T["grille"], lw=0.6, zorder=0)
 
+        # Connecteur fin avec petite flèche directionnelle
         if apres != avant:
-            ax.annotate("", xy=(i, apres), xytext=(i, avant),
-                        arrowprops=dict(arrowstyle="->", color=_T["serie_dim"], lw=1.3),
-                        zorder=2)
+            ax.annotate(
+                "", xy=(i, apres), xytext=(i, avant),
+                arrowprops=dict(
+                    arrowstyle="->, head_width=0.3, head_length=0.4",
+                    color=_T["texte_dim"], lw=1.0, mutation_scale=7,
+                ),
+                zorder=2,
+            )
 
-        ax.scatter([i], [avant], s=120, facecolor="none", edgecolor=couleur,
-                   linewidth=2, zorder=3)
-        ax.scatter([i], [apres], s=120, facecolor=couleur, edgecolor=couleur,
-                   zorder=4)
+        # Points : creux = avant, plein = après — taille plus grande
+        ax.scatter([i], [avant], s=180, facecolor=_T["fond_neutre"],
+                   edgecolor=couleur, linewidth=2.2, zorder=3)
+        ax.scatter([i], [apres], s=180, facecolor=couleur,
+                   edgecolor=couleur, zorder=4)
 
-        # en-têtes de colonne en 2 niveaux, hors zone graphique
-        ax.text(i, 1.32, nom, transform=trans, ha="center", va="bottom",
+        # ── En-têtes de colonnes hors zone graphique ───────────────────────
+        y_nom  = 1.24 if has_desc else 1.10
+        y_desc = 0.99
+        ax.text(i, y_nom, nom, transform=trans, ha="center", va="bottom",
                 fontsize=10, fontweight="bold", color=_T["texte"], clip_on=False)
         desc = descriptions.get(nom)
         if desc:
-            ax.text(i, 1.04, textwrap.fill(desc, 18), transform=trans,
-                    ha="center", va="bottom", fontsize=8.5, color=_T["texte_dim"],
-                    linespacing=1.3, clip_on=False)
+            ax.text(i, y_desc, textwrap.fill(desc, 18), transform=trans,
+                    ha="center", va="bottom", fontsize=8.5,
+                    color=_T["texte_dim"], linespacing=1.3, clip_on=False)
 
     ax.set_xlim(-0.6, n - 0.4)
     ax.xaxis.set_visible(False)
@@ -949,24 +991,30 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_color(_T["grille"])
     ax.spines["bottom"].set_color(_T["grille"])
-    ax.tick_params(length=0)
+    ax.tick_params(length=0, labelcolor=_T["texte_dim"], labelsize=9)
 
+    # ── Légende dans la zone graphique (coin haut-droit) ────────────────────
     legende_handles = [
         plt.Line2D([0], [0], marker="o", linestyle="none", markersize=8,
-                   markerfacecolor="none", markeredgecolor=couleur, markeredgewidth=2,
-                   label=label_avant),
+                   markerfacecolor=_T["fond_neutre"], markeredgecolor=couleur,
+                   markeredgewidth=2, label=label_avant),
         plt.Line2D([0], [0], marker="o", linestyle="none", markersize=8,
-                   markerfacecolor=couleur, markeredgecolor=couleur, label=label_apres),
+                   markerfacecolor=couleur, markeredgecolor=couleur,
+                   label=label_apres),
     ]
-    ax.legend(handles=legende_handles, loc="upper right", bbox_to_anchor=(1.0, 1.28),
-              frameon=False, fontsize=9, ncol=2)
+    ax.legend(handles=legende_handles, loc="upper right",
+              bbox_to_anchor=(0.995, 0.995), bbox_transform=ax.transAxes,
+              frameon=False, fontsize=9, ncol=2, labelcolor=_T["texte"])
 
     if titre:
-        fig.text(0.01, 0.96, titre, fontsize=14, fontweight="bold", color=_T["texte"])
+        fig.text(0.01, 0.97, titre, fontsize=14, fontweight="bold",
+                 color=_T["texte"])
     if sous_titre:
-        fig.text(0.01, 0.91, sous_titre, fontsize=10, color=_T["texte_dim"])
+        fig.text(0.10, top_adj + 0.005, sous_titre, fontsize=9.5,
+                 color=_T["texte_dim"], transform=fig.transFigure)
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
+        fig.text(0.01, 0.01, note, fontsize=8, color=_T["texte_dim"],
+                 style="italic")
 
     return fig, ax
 
