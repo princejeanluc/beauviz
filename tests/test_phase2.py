@@ -98,5 +98,91 @@ def test_nouveaux_graphiques_respectent_theme():
                         total_debut=50, label_debut="Début")
     plt.close('all')
 
+# ── Tests fn_couleur (Item 3 — coloration conditionnelle) ────────────────────
+
+def test_colorier_si_barres():
+    """colorier_si crée une fn_couleur qui colore chaque barre selon le seuil."""
+    import matplotlib.pyplot as plt
+    from beau_graphique import barres, colorier_si
+    fn = colorier_si(seuil=50)
+    fig, ax = barres(["A", "B", "C"], [30, 50, 80], fn_couleur=fn)
+    patches = ax.patches
+    assert patches[0].get_facecolor() != patches[2].get_facecolor()  # bas ≠ haut
+    plt.close("all")
+
+
+def test_colorier_selon_barres():
+    """colorier_selon applique la première règle qui correspond."""
+    import matplotlib.pyplot as plt
+    from beau_graphique import barres, colorier_selon
+    fn = colorier_selon([
+        (lambda v: v >= 80, "#2DC653"),
+        (lambda v: v >= 50, "#F3722C"),
+        (True,              "#E63946"),
+    ])
+    fig, ax = barres(["A", "B", "C"], [30, 60, 90], fn_couleur=fn)
+    assert len(ax.patches) == 3
+    plt.close("all")
+
+
+def test_colorier_si_lollipop():
+    """fn_couleur fonctionne aussi sur lollipop (scatter multi-couleurs)."""
+    import matplotlib.pyplot as plt
+    from beau_graphique import lollipop, colorier_si
+    fn = colorier_si(seuil=50, couleur_haut="#00C896", couleur_bas="#E63946")
+    fig, ax = lollipop(
+        categories=["X", "Y", "Z"],
+        valeurs=[30, 70, 50],
+        fn_couleur=fn,
+    )
+    # scatter remplace plot — doit y avoir une PathCollection
+    from matplotlib.collections import PathCollection
+    assert any(isinstance(c, PathCollection) for c in ax.collections)
+    plt.close("all")
+
+
+def test_fn_couleur_priorite_sur_couleur():
+    """fn_couleur prend la priorité sur le paramètre couleur=."""
+    import matplotlib.pyplot as plt
+    from beau_graphique import barres, colorier_si
+    fn = colorier_si(seuil=50)
+    fig, ax = barres(["A", "B"], [30, 80], couleur="#FF0000", fn_couleur=fn)
+    # Les deux barres ne doivent pas être rouges (#FF0000)
+    for p in ax.patches:
+        r, g, b, _ = p.get_facecolor()
+        assert not (r > 0.9 and g < 0.1 and b < 0.1), "couleur= ne doit pas écraser fn_couleur"
+    plt.close("all")
+
+
+# ── Tests système de thèmes ───────────────────────────────────────────────────
+
+def test_theme_dark():
+    """init(theme='dark') bascule _T et les rcParams."""
+    import matplotlib.pyplot as plt
+    import beau_graphique as bg
+    bg.init(theme="dark")
+    assert bg._T["bg"] == "#0D1B2A"
+    assert plt.rcParams["figure.facecolor"] == "#0D1B2A"
+    bg.init()  # remettre en light pour les tests suivants
+
+
+def test_theme_personnalise():
+    """Un dict partiel est fusionné sur le thème light par défaut."""
+    import beau_graphique as bg
+    bg.init(theme={"bg": "#001122", "texte": "#FFFFFF"})
+    assert bg._T["bg"] == "#001122"
+    assert bg._T["texte"] == "#FFFFFF"
+    assert bg._T["grille"] == bg.THEMES["light"]["grille"]  # hérité
+    bg.init()  # reset
+
+
+def test_theme_inconnu_leve_erreur():
+    """Un nom de thème inconnu doit lever ValueError."""
+    import beau_graphique as bg
+    with pytest.raises(ValueError, match="Thème inconnu"):
+        bg.init(theme="foobar")
+    bg.init()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

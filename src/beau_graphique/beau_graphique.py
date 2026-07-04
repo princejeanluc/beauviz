@@ -25,30 +25,131 @@ import textwrap
 # ── Chemin vers le fichier de style (même dossier que ce module) ───────────
 _STYLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beau_graphique.mplstyle")
 
+# format= est utilisé comme nom de paramètre dans toutes les fonctions publiques ;
+# on sauvegarde ici le built-in pour les rares endroits qui en ont besoin.
+_fmt_builtin = format
+
 # Palette par défaut (même ordre que dans le .mplstyle)
 PALETTE = ["#4361EE", "#F72585", "#4CC9F0", "#7209B7",
            "#3A0CA3", "#F3722C", "#43AA8B", "#90BE6D"]
+
+# Formats de figure prédéfinis
+# Utilisez format="slide" au lieu de figsize=(13.33, 7.5)
+FORMATS = {
+    "slide":     (13.33, 7.5),    # 16:9 — PowerPoint, Google Slides
+    "a4":        (11.69, 5.5),    # A4 paysage demi-hauteur — rapport Word / PDF
+    "a4_pleine": (11.69, 8.27),   # A4 paysage pleine page
+    "carre":     (7, 7),          # carré — réseaux sociaux, miniatures
+    "large":     (14, 5.6),       # très large — dashboards multi-graphiques
+}
+
+# Registre de couleurs par entité
+# Remplissez une fois en début de session pour assurer la cohérence
+# des couleurs entre tous les graphiques d'un même rapport.
+COULEURS_ENTITES: dict = {}
+
+# ── Thèmes ──────────────────────────────────────────────────────────────────
+# Chaque thème définit 6 rôles sémantiques consultés par toutes les fonctions.
+# Passez votre propre dict à init(theme={...}) pour personnaliser entièrement.
+THEMES: dict = {
+    "light": {
+        "bg":          "#F7F8FC",   # fond figure / axes
+        "texte":       "#1A1C2E",   # texte principal (titres, annotations grasses)
+        "texte_dim":   "#6B6F85",   # texte secondaire (sous-titres, axes, notes)
+        "grille":      "#D8DAE8",   # lignes de grille, séparateurs légers
+        "fond_neutre": "#FFFFFF",   # blanc neutre (trou donut, boîte violin, bord barre)
+        "serie_dim":   "#A8ABBC",   # séries non-focus, éléments en retrait
+    },
+    "dark": {
+        "bg":          "#0D1B2A",
+        "texte":       "#E8ECF4",
+        "texte_dim":   "#8A8FA8",
+        "grille":      "#1E2D40",
+        "fond_neutre": "#0D1B2A",
+        "serie_dim":   "#3A4A5E",
+    },
+}
+
+# Thème actif — toutes les fonctions le lisent via _T["clé"]
+_T: dict = dict(THEMES["light"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Initialisation
 # ══════════════════════════════════════════════════════════════════════════════
 
-def init():
-    """Active le style beau_graphique pour toute la session matplotlib."""
+def init(theme="light"):
+    """
+    Active le style beau_graphique et configure le thème visuel.
+
+    Parameters
+    ----------
+    theme : str ou dict
+        ``"light"`` (défaut) — fond clair, idéal pour rapports imprimés.
+        ``"dark"``  — fond sombre, idéal pour slides et présentations dark.
+        ``dict``    — thème personnalisé ; les clés manquantes sont héritées
+                      du thème ``"light"``. Clés disponibles :
+                      ``bg``, ``texte``, ``texte_dim``, ``grille``,
+                      ``fond_neutre``, ``serie_dim``.
+
+    Exemple
+    -------
+    >>> init()                             # thème clair par défaut
+    >>> init(theme="dark")                 # thème sombre
+    >>> init(theme={"bg": "#1A1A2E",       # thème personnalisé (Marine nuit)
+    ...             "texte": "#EAEDF4",
+    ...             "texte_dim": "#7B8499",
+    ...             "grille": "#1E2440",
+    ...             "fond_neutre": "#1A1A2E",
+    ...             "serie_dim": "#3C4A66"})
+    """
+    global _T
+
+    # ── Résoudre le thème ─────────────────────────────────────────────────────
+    if isinstance(theme, str):
+        if theme not in THEMES:
+            valides = ", ".join(f'"{k}"' for k in THEMES)
+            raise ValueError(f"Thème inconnu : '{theme}'. Valides : {valides}")
+        resolved = dict(THEMES[theme])
+    elif isinstance(theme, dict):
+        resolved = {**THEMES["light"], **theme}
+    else:
+        raise TypeError(f"theme doit être str ou dict, reçu {type(theme).__name__}")
+
+    _T = resolved
+    nom_theme = theme if isinstance(theme, str) else "personnalisé"
+
+    # ── Charger le style de base puis écraser avec les couleurs du thème ──────
     if os.path.exists(_STYLE_PATH):
         plt.style.use(_STYLE_PATH)
-    else:
-        # fallback léger si le fichier .mplstyle n'est pas trouvé
-        plt.rcParams.update({
-            "figure.facecolor": "#F7F8FC",
-            "axes.facecolor":   "#F7F8FC",
-            "axes.spines.top":  False,
-            "axes.spines.right": False,
-            "axes.grid": True,
-            "grid.alpha": 0.6,
-        })
-    print("✓ Style beau_graphique activé.")
+
+    plt.rcParams.update({
+        "figure.facecolor":  _T["bg"],
+        "axes.facecolor":    _T["bg"],
+        "axes.edgecolor":    _T["grille"],
+        "axes.labelcolor":   _T["texte_dim"],
+        "text.color":        _T["texte"],
+        "xtick.color":       _T["texte_dim"],
+        "ytick.color":       _T["texte_dim"],
+        "grid.color":        _T["grille"],
+        "legend.facecolor":  _T["bg"],
+        "legend.edgecolor":  _T["grille"],
+        "savefig.facecolor": _T["bg"],
+    })
+
+    # ── Synchroniser les constantes de couleur de narratif.py ─────────────────
+    try:
+        import narratif as _nar
+        _nar.BG         = _T["bg"]
+        _nar.TEXTE      = _T["texte"]
+        _nar.TEXTE_DOUX = _T["texte_dim"]
+        _nar.GRIS_FORT  = _T["texte_dim"]
+        _nar.GRIS_MOY   = _T["serie_dim"]
+        _nar.GRIS_CLAIR = _T["grille"]
+    except ImportError:
+        pass
+
+    print(f"✓ Style beau_graphique activé (thème : {nom_theme}).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -75,11 +176,11 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
     """
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=14, loc="left")
+                     color=_T["texte"], pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 26), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if xlabel:
         ax.set_xlabel(xlabel)
     if ylabel:
@@ -90,7 +191,7 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
         ax.legend(loc="best")
 
     if note and fig:
-        fig.text(0.01, -0.03, note, fontsize=8.5, color="#9295A8",
+        fig.text(0.01, -0.03, note, fontsize=8.5, color=_T["texte_dim"],
                  style="italic", transform=ax.transAxes)
 
     ax.yaxis.set_tick_params(length=0)
@@ -101,11 +202,150 @@ def _finalize(ax, titre="", sous_titre="", xlabel="", ylabel="",
     return fig, ax
 
 
-def _new_fig(figsize=None, ax=None):
+def _palette_pour(noms: list) -> list:
+    """Retourne les couleurs pour une liste de noms, en consultant COULEURS_ENTITES
+    en priorité et en tombant sur PALETTE en fallback."""
+    return [
+        COULEURS_ENTITES.get(str(nom), PALETTE[i % len(PALETTE)])
+        for i, nom in enumerate(noms)
+    ]
+
+
+def enregistrer_couleurs(mapping: dict, fusionner: bool = True) -> None:
+    """
+    Associe des couleurs hex à des entités nommées (villes, produits, séries…)
+    pour assurer la cohérence visuelle entre tous les graphiques d'un rapport.
+
+    Parameters
+    ----------
+    mapping  : dict {"NomEntité": "#couleur_hex", ...}
+    fusionner: True (défaut) — ajoute/met à jour le registre existant.
+               False — remplace l'intégralité du registre.
+
+    Exemple
+    -------
+    >>> enregistrer_couleurs({
+    ...     "Douala":    "#4361EE",
+    ...     "Yaoundé":   "#F3722C",
+    ...     "Bafoussam": "#2DC653",
+    ... })
+    >>> barres(["Douala", "Yaoundé"], [79, 61])   # → bleu et orange automatiquement
+    >>> ligne(x=mois, y_series={"Douala": [...], "Yaoundé": [...]})  # idem
+    """
+    global COULEURS_ENTITES
+    if fusionner:
+        COULEURS_ENTITES.update(mapping)
+    else:
+        COULEURS_ENTITES = dict(mapping)
+
+
+def reinitialiser_couleurs() -> None:
+    """Vide le registre de couleurs par entité."""
+    COULEURS_ENTITES.clear()
+
+
+def _couleurs_auto(categories, couleur_explicite=None, couleurs_multiples=False):
+    """
+    Résout la liste de couleurs pour barres().
+    — couleur_explicite fourni → toutes les barres dans cette couleur.
+    — Sinon, si couleurs_multiples=True OU au moins une catégorie est dans le
+      registre → une couleur par catégorie (via _palette_pour).
+    — Sinon → PALETTE[0] pour toutes.
+    """
+    if couleur_explicite is not None:
+        return couleur_explicite
+    if couleurs_multiples or any(str(c) in COULEURS_ENTITES for c in categories):
+        return _palette_pour([str(c) for c in categories])
+    return PALETTE[0]
+
+
+_COULEUR_HAUT   = "#2DC653"   # vert — au-dessus du seuil
+_COULEUR_BAS    = "#E63946"   # rouge — en-dessous du seuil
+_COULEUR_NEUTRE = "#B0B3C6"   # gris — exactement égal au seuil
+
+
+def colorier_si(seuil, couleur_haut=None, couleur_bas=None, couleur_egal=None):
+    """
+    Retourne une fonction ``fn_couleur(categorie, valeur) -> str`` qui colore
+    chaque barre (ou point) selon sa position par rapport à un seuil.
+
+    À passer au paramètre ``fn_couleur=`` de :func:`barres` ou :func:`lollipop`.
+
+    Parameters
+    ----------
+    seuil        : valeur pivot (objectif, moyenne, cible…)
+    couleur_haut : couleur quand valeur > seuil  (défaut : vert  #2DC653)
+    couleur_bas  : couleur quand valeur < seuil  (défaut : rouge #E63946)
+    couleur_egal : couleur quand valeur == seuil (défaut : gris  #B0B3C6)
+
+    Exemple
+    -------
+    >>> barres(mois, ventes, fn_couleur=colorier_si(seuil=50_000))
+    >>> lollipop(villes, scores, fn_couleur=colorier_si(70, couleur_bas="#F3722C"))
+    """
+    ch = couleur_haut or _COULEUR_HAUT
+    cb = couleur_bas  or _COULEUR_BAS
+    ce = couleur_egal or _COULEUR_NEUTRE
+
+    def _fn(_, val):
+        if val > seuil:  return ch
+        if val < seuil:  return cb
+        return ce
+
+    return _fn
+
+
+def colorier_selon(regles: list):
+    """
+    Retourne une fonction ``fn_couleur(categorie, valeur) -> str`` depuis une
+    liste de règles priorisées.
+
+    Chaque règle est un tuple ``(condition, couleur)`` :
+
+    * ``condition`` : ``True`` (fallback toujours vrai) **ou** un callable
+      ``(valeur) -> bool``.
+    * ``couleur``   : chaîne hex (``"#2DC653"``) ou nom matplotlib (``"red"``).
+
+    Les règles sont testées dans l'ordre ; la première qui correspond est
+    retenue.  Terminez toujours par un fallback ``(True, couleur)``.
+
+    Exemple
+    -------
+    >>> fn = colorier_selon([
+    ...     (lambda v: v >= 80, "#2DC653"),   # vert  — excellent
+    ...     (lambda v: v >= 50, "#F3722C"),   # orange — correct
+    ...     (True,              "#E63946"),   # rouge  — insuffisant
+    ... ])
+    >>> barres(villes, scores, fn_couleur=fn)
+    """
+    def _fn(_, val):
+        for condition, couleur in regles:
+            if condition is True or condition(val):
+                return couleur
+        return PALETTE[0]
+
+    return _fn
+
+
+def _resoudre_figsize(figsize, format=None):
+    """Retourne le figsize effectif depuis un preset ou une valeur explicite.
+    figsize prend la priorité sur format si les deux sont fournis.
+    """
+    if figsize is not None:
+        return figsize
+    if format is not None:
+        if format not in FORMATS:
+            valides = ", ".join(f'"{k}"' for k in FORMATS)
+            raise ValueError(f"format inconnu : '{format}'. Valides : {valides}")
+        return FORMATS[format]
+    return None
+
+
+def _new_fig(figsize=None, ax=None, format=None):
     """Crée une nouvelle figure, ou réutilise l'axe fourni si présent."""
     if ax is not None:
         return ax.figure, ax
-    return plt.subplots(figsize=figsize or (10, 5.6))
+    return plt.subplots(figsize=_resoudre_figsize(figsize, format) or (10, 5.6))
 
 
 def _es_date(valeurs) -> bool:
@@ -142,7 +382,7 @@ def _formater_axe_dates(ax, valeurs, freq=None):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
-          note="", markers=True, fill_last=False, figsize=None, ax=None, **_extra):
+          note="", markers=True, fill_last=False, figsize=None, ax=None, format=None, **_extra):
     """
     Graphique en lignes multi-séries.
 
@@ -170,19 +410,20 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    couleurs_series = _palette_pour(list(y_series.keys()))
     for i, (nom, vals) in enumerate(y_series.items()):
-        color = PALETTE[i % len(PALETTE)]
+        color = couleurs_series[i]
         mk = "o" if markers else None
         ax.plot(x, vals, label=nom, color=color, marker=mk,
-                markerfacecolor="white", markeredgecolor=color,
+                markerfacecolor=_T["fond_neutre"], markeredgecolor=color,
                 markeredgewidth=2, zorder=3)
         if fill_last and i == 0:
             ax.fill_between(x, vals, alpha=0.12, color=color)
 
     # Annotation valeur finale
     for i, (nom, vals) in enumerate(y_series.items()):
-        color = PALETTE[i % len(PALETTE)]
+        color = couleurs_series[i]
         ax.annotate(f"{vals[-1]}",
                     xy=(x[-1], vals[-1]),
                     xytext=(6, 0), textcoords="offset points",
@@ -200,7 +441,8 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 
 def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
            note="", couleur=None, horizontal=False, valeurs_sur_barres=True,
-           couleurs_multiples=False, figsize=None, ax=None, **_extra):
+           couleurs_multiples=False, fn_couleur=None, figsize=None, ax=None,
+           format=None, **_extra):
     """
     Graphique en barres simples (verticales ou horizontales).
 
@@ -226,12 +468,12 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
 
-    if couleurs_multiples:
-        colors = [PALETTE[i % len(PALETTE)] for i in range(len(categories))]
+    if fn_couleur is not None:
+        colors = [fn_couleur(cat, val) for cat, val in zip(categories, valeurs)]
     else:
-        colors = couleur or PALETTE[0]
+        colors = _couleurs_auto(categories, couleur, couleurs_multiples)
 
     if horizontal:
         bars = ax.barh(categories, valeurs, color=colors, height=0.55)
@@ -240,7 +482,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
             for bar, val in zip(bars, valeurs):
                 ax.text(bar.get_width() + max(valeurs) * 0.01, bar.get_y() + bar.get_height() / 2,
                         f"{val:,.0f}", va="center", ha="left", fontsize=9.5, fontweight="bold",
-                        color="#2D2F3E")
+                        color=_T["texte"])
         ax.set_xlim(0, max(valeurs) * 1.15)
         ax.xaxis.set_visible(False)
         ax.spines["bottom"].set_visible(False)
@@ -250,7 +492,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
             for bar, val in zip(bars, valeurs):
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(valeurs) * 0.01,
                         f"{val:,.0f}", ha="center", va="bottom", fontsize=9.5,
-                        fontweight="bold", color="#2D2F3E")
+                        fontweight="bold", color=_T["texte"])
         ax.set_ylim(0, max(valeurs) * 1.15)
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
@@ -265,7 +507,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
-                    xlabel="", ylabel="", note="", figsize=None, ax=None, **_extra):
+                    xlabel="", ylabel="", note="", figsize=None, ax=None, format=None, **_extra):
     """
     Barres groupées multi-séries.
 
@@ -287,19 +529,20 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     n_groupes = len(groupes)
     x = np.arange(len(categories))
     width = 0.7 / n_groupes
+    couleurs_groupes = _palette_pour(list(groupes.keys()))
 
     for i, (nom, vals) in enumerate(groupes.items()):
         offset = (i - n_groupes / 2 + 0.5) * width
         bars = ax.bar(x + offset, vals, width * 0.9, label=nom,
-                      color=PALETTE[i % len(PALETTE)])
+                      color=couleurs_groupes[i])
         for bar, val in zip(bars, vals):
             ax.text(bar.get_x() + bar.get_width() / 2,
                     bar.get_height() + max(max(v) for v in groupes.values()) * 0.01,
-                    f"{val}", ha="center", va="bottom", fontsize=8.5, color="#2D2F3E")
+                    f"{val}", ha="center", va="bottom", fontsize=8.5, color=_T["texte"])
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
@@ -316,7 +559,7 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
-         note="", empile=False, figsize=None, ax=None):
+         note="", empile=False, figsize=None, ax=None, format=None):
     """
     Graphique en aire (simple ou empilée).
 
@@ -335,17 +578,18 @@ def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     noms = list(y_series.keys())
     valeurs = list(y_series.values())
 
+    couleurs_series_aire = _palette_pour(noms)
     if empile:
         ax.stackplot(x, valeurs, labels=noms,
-                     colors=[c + "CC" for c in PALETTE[:len(noms)]],
+                     colors=[c + "CC" for c in couleurs_series_aire],
                      alpha=0.88)
     else:
         for i, (nom, vals) in enumerate(y_series.items()):
-            color = PALETTE[i % len(PALETTE)]
+            color = couleurs_series_aire[i]
             ax.fill_between(x, vals, alpha=0.20, color=color)
             ax.plot(x, vals, label=nom, color=color, linewidth=2.4)
 
@@ -360,7 +604,7 @@ def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréquence",
-                note="", courbe_densite=False, couleur=None, figsize=None, ax=None):
+                note="", courbe_densite=False, couleur=None, figsize=None, ax=None, format=None):
     """
     Histogramme avec optionnellement une courbe de densité KDE.
 
@@ -376,10 +620,10 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     color = couleur or PALETTE[0]
 
-    ax.hist(data, bins=bins, color=color, alpha=0.75, edgecolor="white", linewidth=0.5)
+    ax.hist(data, bins=bins, color=color, alpha=0.75, edgecolor=_T["fond_neutre"], linewidth=0.5)
 
     if courbe_densite:
         from scipy.stats import gaussian_kde
@@ -411,7 +655,7 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
 
 def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
           titre="", sous_titre="", xlabel="", ylabel="", note="",
-          ligne_tendance=False, figsize=None, ax=None):
+          ligne_tendance=False, figsize=None, ax=None, format=None):
     """
     Nuage de points avec encodage optionnel couleur/taille.
 
@@ -431,9 +675,9 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
 
-    scatter_kw = dict(alpha=0.75, edgecolors="white", linewidths=0.6)
+    scatter_kw = dict(alpha=0.75, edgecolors=_T["fond_neutre"], linewidths=0.6)
 
     if couleur_var is not None:
         scatter_kw["c"] = couleur_var
@@ -457,7 +701,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
     if labels:
         for xi, yi, lb in zip(x, y, labels):
             ax.annotate(lb, (xi, yi), xytext=(5, 5), textcoords="offset points",
-                        fontsize=8.5, color="#4A4D6A")
+                        fontsize=8.5, color=_T["texte_dim"])
 
     if ligne_tendance:
         es_date_x = _es_date(x)
@@ -480,7 +724,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def camembert(labels, valeurs, titre="", sous_titre="", note="",
-              donut=True, exploser_max=True, figsize=None, ax=None):
+              donut=True, exploser_max=True, figsize=None, ax=None, format=None):
     """
     Graphique circulaire (camembert ou donut).
 
@@ -499,16 +743,17 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
     ... )
     """
     ajuster_layout = ax is None
+    figsize = _resoudre_figsize(figsize, format)
     fig, ax = _new_fig(figsize or (7, 7), ax=ax)
 
     explode = [0] * len(valeurs)
     if exploser_max:
         explode[np.argmax(valeurs)] = 0.06
 
-    wedge_kw = dict(linewidth=2.5, edgecolor="white")
+    wedge_kw = dict(linewidth=2.5, edgecolor=_T["fond_neutre"])
     wedges, texts, autotexts = ax.pie(
         valeurs, labels=None, autopct="%1.1f%%",
-        colors=PALETTE[:len(valeurs)], explode=explode,
+        colors=_palette_pour(labels), explode=explode,
         startangle=90, wedgeprops=wedge_kw,
         pctdistance=0.82 if donut else 0.65
     )
@@ -523,7 +768,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
         ax.add_patch(circle)
         total = sum(valeurs)
         ax.text(0, 0, f"Total\n{total:,.0f}", ha="center", va="center",
-                fontsize=12, fontweight="bold", color="#1A1C2E")
+                fontsize=12, fontweight="bold", color=_T["texte"])
 
     # Légende externe propre
     legend_patches = [mpatches.Patch(color=PALETTE[i], label=f"{lb}  ({v})")
@@ -535,13 +780,13 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
 
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=18, loc="center")
+                     color=_T["texte"], pad=18, loc="center")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0.5, 1.04), xycoords="axes fraction",
-                    ha="center", fontsize=10, color="#6B6F85")
+                    ha="center", fontsize=10, color=_T["texte_dim"])
     if note and fig:
         fig.text(0.5, -0.04, note, ha="center", fontsize=8.5,
-                 color="#9295A8", style="italic")
+                 color=_T["texte_dim"], style="italic")
 
     if ajuster_layout:
         fig.tight_layout()
@@ -554,7 +799,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
 
 def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
             titre="", sous_titre="", note="",
-            cmap="RdYlGn", annot=True, fmt=".2f", figsize=None, ax=None):
+            cmap="RdYlGn", annot=True, fmt=".2f", figsize=None, ax=None, format=None):
     """
     Heatmap générique (corrélation, pivot, confusion matrix…).
 
@@ -575,6 +820,7 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
     matrice = np.array(matrice)
     n, m = matrice.shape
     ajuster_layout = ax is None
+    figsize = _resoudre_figsize(figsize, format)
     fig, ax = _new_fig(figsize or (max(6, m * 0.9), max(5, n * 0.75)), ax=ax)
 
     im = ax.imshow(matrice, cmap=cmap, aspect="auto",
@@ -596,7 +842,7 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
             for j in range(m):
                 val = matrice[i, j]
                 color = "white" if val < thresh else "#1A1C2E"
-                ax.text(j, i, format(val, fmt), ha="center", va="center",
+                ax.text(j, i, _fmt_builtin(val, fmt), ha="center", va="center",
                         fontsize=9, color=color, fontweight="bold")
 
     ax.set_frame_on(False)
@@ -604,12 +850,12 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
 
     if titre:
         ax.set_title(titre, fontsize=15, fontweight="bold",
-                     color="#1A1C2E", pad=14, loc="left")
+                     color=_T["texte"], pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1.02), xycoords="axes fraction",
-                    fontsize=10, color="#6B6F85")
+                    fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.03, note, fontsize=8.5, color="#9295A8",
+        fig.text(0.01, -0.03, note, fontsize=8.5, color=_T["texte_dim"],
                  style="italic", transform=ax.transAxes)
 
     if ajuster_layout:
@@ -624,7 +870,7 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
 def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
                         label_avant="Avant", label_apres="Après",
                         couleur=None, titre="", sous_titre="", note="",
-                        figsize=None):
+                        figsize=None, format=None):
     """
     Compare N dimensions (colonnes) entre deux périodes sur un axe Y commun.
     Chaque colonne affiche un point creux (avant) et un point plein (après)
@@ -647,6 +893,7 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
     ... )
     """
     couleur = couleur or PALETTE[0]
+    figsize = _resoudre_figsize(figsize, format)
     descriptions = descriptions or {}
     noms = list(colonnes.keys())
     n = len(noms)
@@ -665,11 +912,11 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
         avant, apres = colonnes[nom]
 
         if i > 0:
-            ax.axvline(i - 0.5, color="#D8DAE8", lw=0.5, zorder=0)
+            ax.axvline(i - 0.5, color=_T["grille"], lw=0.5, zorder=0)
 
         if apres != avant:
             ax.annotate("", xy=(i, apres), xytext=(i, avant),
-                        arrowprops=dict(arrowstyle="->", color="#A8ABBC", lw=1.3),
+                        arrowprops=dict(arrowstyle="->", color=_T["serie_dim"], lw=1.3),
                         zorder=2)
 
         ax.scatter([i], [avant], s=120, facecolor="none", edgecolor=couleur,
@@ -679,19 +926,19 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
 
         # en-têtes de colonne en 2 niveaux, hors zone graphique
         ax.text(i, 1.32, nom, transform=trans, ha="center", va="bottom",
-                fontsize=10, fontweight="bold", color="#1A1C2E", clip_on=False)
+                fontsize=10, fontweight="bold", color=_T["texte"], clip_on=False)
         desc = descriptions.get(nom)
         if desc:
             ax.text(i, 1.04, textwrap.fill(desc, 18), transform=trans,
-                    ha="center", va="bottom", fontsize=8.5, color="#6B6F85",
+                    ha="center", va="bottom", fontsize=8.5, color=_T["texte_dim"],
                     linespacing=1.3, clip_on=False)
 
     ax.set_xlim(-0.6, n - 0.4)
     ax.xaxis.set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#D8DAE8")
-    ax.spines["bottom"].set_color("#D8DAE8")
+    ax.spines["left"].set_color(_T["grille"])
+    ax.spines["bottom"].set_color(_T["grille"])
     ax.tick_params(length=0)
 
     legende_handles = [
@@ -705,11 +952,11 @@ def dot_plot_comparatif(colonnes: dict, descriptions: dict = None,
               frameon=False, fontsize=9, ncol=2)
 
     if titre:
-        fig.text(0.01, 0.96, titre, fontsize=14, fontweight="bold", color="#1A1C2E")
+        fig.text(0.01, 0.96, titre, fontsize=14, fontweight="bold", color=_T["texte"])
     if sous_titre:
-        fig.text(0.01, 0.91, sous_titre, fontsize=10, color="#6B6F85")
+        fig.text(0.01, 0.91, sous_titre, fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -723,7 +970,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
              niveaux_couleur: list = None, quadrants=False,
              quadrant_x=0.5, quadrant_y=0.5, taille_min=80, taille_max=2000,
              palette_bulles: list = None, titre="", sous_titre="", note="",
-             figsize=None):
+             figsize=None, format=None):
     """
     Nuage de points où chaque bulle encode 4 variables : position X, position Y,
     taille (variable continue) et couleur (variable ordinale 1→N). Permet de
@@ -745,6 +992,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     ...     label_couleur="Niveau d'adoption", quadrants=True,
     ... )
     """
+    figsize = _resoudre_figsize(figsize, format)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     taille = np.asarray(taille, dtype=float)
@@ -764,11 +1012,11 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     fig, ax = plt.subplots(figsize=figsize or (9, 7))
 
     if quadrants:
-        ax.axhline(quadrant_y, color="#D8DAE8", lw=1, ls="--", zorder=1)
-        ax.axvline(quadrant_x, color="#D8DAE8", lw=1, ls="--", zorder=1)
+        ax.axhline(quadrant_y, color=_T["grille"], lw=1, ls="--", zorder=1)
+        ax.axvline(quadrant_x, color=_T["grille"], lw=1, ls="--", zorder=1)
 
     ax.scatter(x, y, s=tailles_norm, color=point_colors, alpha=0.85,
-              edgecolor="white", linewidth=1.2, zorder=3)
+              edgecolor=_T["fond_neutre"], linewidth=1.2, zorder=3)
 
     if labels is not None:
         ordre = np.argsort(y)
@@ -784,16 +1032,16 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
             rayon = np.sqrt(tailles_norm[idx] / np.pi)
             ax.annotate(labels[idx], xy=(x[idx], y[idx]),
                         xytext=(rayon + 5, decalage), textcoords="offset points",
-                        fontsize=9, color="#1A1C2E", va="center")
+                        fontsize=9, color=_T["texte"], va="center")
 
     xmarge = (x.max() - x.min()) * 0.1 or 0.1
     ymarge = (y.max() - y.min()) * 0.1 or 0.1
     ax.set_xlim(x.min() - xmarge, x.max() + xmarge)
     ax.set_ylim(y.min() - ymarge, y.max() + ymarge)
 
-    ax.set_xlabel((xlabel + "  →") if xlabel else "", color="#6B6F85", fontsize=10)
-    ax.set_ylabel((ylabel + "  ↑") if ylabel else "", color="#6B6F85", fontsize=10)
-    ax.grid(axis="both", color="#D8DAE8", lw=0.6, ls="--", alpha=0.5)
+    ax.set_xlabel((xlabel + "  →") if xlabel else "", color=_T["texte_dim"], fontsize=10)
+    ax.set_ylabel((ylabel + "  ↑") if ylabel else "", color=_T["texte_dim"], fontsize=10)
+    ax.grid(axis="both", color=_T["grille"], lw=0.6, ls="--", alpha=0.5)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.tick_params(length=0)
@@ -801,7 +1049,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     fig.subplots_adjust(right=0.76)
 
     handles_couleur = [plt.scatter([], [], s=120, color=couleur_par_niveau[niv],
-                                    edgecolor="white") for niv in niveaux_couleur]
+                                    edgecolor=_T["fond_neutre"]) for niv in niveaux_couleur]
     leg1 = ax.legend(handles_couleur, [str(niv) for niv in niveaux_couleur],
                      title=label_couleur, loc="upper left", bbox_to_anchor=(1.02, 1.0),
                      frameon=False, fontsize=8.5, title_fontsize=9)
@@ -809,21 +1057,21 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
 
     valeurs_ref = sorted(set(np.round(np.linspace(taille.min(), taille.max(), 4)).astype(int).tolist()))
     handles_taille = [plt.scatter([], [], s=taille_min + (v - taille.min()) / trange * (taille_max - taille_min),
-                                   color="#A8ABBC", alpha=0.5, edgecolor="#6B6F85")
+                                   color=_T["serie_dim"], alpha=0.5, edgecolor=_T["texte_dim"])
                       for v in valeurs_ref]
     ax.legend(handles_taille, [str(v) for v in valeurs_ref],
              title=label_taille, loc="lower left", bbox_to_anchor=(1.02, 0.0),
              frameon=False, fontsize=8.5, title_fontsize=9, labelspacing=1.4)
 
     if titre:
-        ax.set_title(titre, fontsize=14, fontweight="bold", color="#1A1C2E",
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=_T["texte"],
                      pad=14, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 26), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -835,7 +1083,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
 def unit_chart(categories: list, valeurs: list, mode="proportion",
                 reference: list = None, valeur_max: float = None, couleur=None,
                 fmt="{:.0f}", fmt_ratio="{:.1f}×", taille_carre=1.0,
-                titre="", sous_titre="", note="", figsize=None):
+                titre="", sous_titre="", note="", figsize=None, format=None):
     """
     Chaque item est un carré de référence rempli proportionnellement à sa valeur.
     Mode "proportion" : un seul rectangle rempli jusqu'au %. Mode "ratio" : deux
@@ -862,6 +1110,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
     ... )
     """
     couleur = couleur or PALETTE[0]
+    figsize = _resoudre_figsize(figsize, format)
     n = len(categories)
     fig, ax = plt.subplots(figsize=figsize or (n * 1.7, 4.5))
 
@@ -873,7 +1122,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
         vmax = valeur_max or max(valeurs)
         for x0, cat, val in zip(positions, categories, valeurs):
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, taille_carre,
-                                            edgecolor="#A8ABBC", facecolor="none", lw=1.5, zorder=2))
+                                            edgecolor=_T["serie_dim"], facecolor="none", lw=1.5, zorder=2))
             h = (val / vmax) * taille_carre if vmax else 0
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, h,
                                             facecolor=couleur, edgecolor="none",
@@ -883,7 +1132,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
                     fontsize=11, fontweight="bold", color=couleur_texte,
                     ha="left", va="bottom", zorder=4)
             ax.text(x0 + taille_carre / 2, -taille_carre * 0.12, cat,
-                    fontsize=9.5, color="#6B6F85", ha="center", va="top")
+                    fontsize=9.5, color=_T["texte_dim"], ha="center", va="top")
             sommets.append(taille_carre)
     else:  # mode == "ratio"
         if reference is not None:
@@ -893,7 +1142,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
         for x0, cat, ratio in zip(positions, categories, ratios):
             cx, cy = x0 + taille_carre / 2, taille_carre / 2
             ax.add_patch(mpatches.Rectangle((x0, 0), taille_carre, taille_carre,
-                                            edgecolor="#A8ABBC", facecolor="none", lw=1.5, zorder=2))
+                                            edgecolor=_T["serie_dim"], facecolor="none", lw=1.5, zorder=2))
             cote_petit = np.sqrt(max(ratio, 0)) * taille_carre
             px0, py0 = cx - cote_petit / 2, cy - cote_petit / 2
             ax.add_patch(mpatches.Rectangle((px0, py0), cote_petit, cote_petit,
@@ -904,7 +1153,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
                     fontsize=11, fontweight="bold", color=couleur,
                     ha="center", va="bottom", zorder=4)
             ax.text(cx, -taille_carre * 0.12, cat,
-                    fontsize=9.5, color="#6B6F85", ha="center", va="top")
+                    fontsize=9.5, color=_T["texte_dim"], ha="center", va="top")
             sommets.append(sommet + taille_carre * 0.32)
 
     ax.set_xlim(-taille_carre * 0.3, positions[-1] + taille_carre * 1.3)
@@ -913,14 +1162,14 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
     ax.axis("off")
 
     if titre:
-        ax.set_title(titre, fontsize=14, fontweight="bold", color="#1A1C2E",
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=_T["texte"],
                      pad=18, loc="left")
     if sous_titre:
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 8), textcoords="offset points",
-                    fontsize=10, color="#6B6F85", annotation_clip=False)
+                    fontsize=10, color=_T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     return fig, ax
 
@@ -931,7 +1180,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
 
 def box_plot(data: list, categories: list = None, titre="", sous_titre="",
              xlabel="", ylabel="", note="", horizontal=False, couleur=None,
-             afficher_points=False, notch=False, figsize=None, ax=None):
+             afficher_points=False, notch=False, figsize=None, ax=None, format=None):
     """
     Boîtes à moustaches : compare la distribution complète (médiane, quartiles,
     valeurs extrêmes) de plusieurs groupes — plus honnête qu'une moyenne seule.
@@ -963,7 +1212,7 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     couleur = couleur or PALETTE[0]
     n = len(data)
     categories = categories or [f"Groupe {i + 1}" for i in range(n)]
@@ -971,11 +1220,11 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
     bp = ax.boxplot(
         data, vert=not horizontal, patch_artist=True, notch=notch,
         labels=categories, widths=0.5,
-        medianprops=dict(color="#1A1C2E", linewidth=2),
-        whiskerprops=dict(color="#A8ABBC", linewidth=1.2),
-        capprops=dict(color="#A8ABBC", linewidth=1.2),
+        medianprops=dict(color=_T["texte"], linewidth=2),
+        whiskerprops=dict(color=_T["serie_dim"], linewidth=1.2),
+        capprops=dict(color=_T["serie_dim"], linewidth=1.2),
         flierprops=dict(marker="o", markerfacecolor="none",
-                        markeredgecolor="#A8ABBC", markersize=5),
+                        markeredgecolor=_T["serie_dim"], markersize=5),
     )
     for box in bp["boxes"]:
         box.set_facecolor(couleur)
@@ -1011,7 +1260,7 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
 
 def violin(data: list, categories: list = None, titre="", sous_titre="",
            xlabel="", ylabel="", note="", afficher_boxplot=True, couleur=None,
-           figsize=None, ax=None):
+           figsize=None, ax=None, format=None):
     """
     Violons : montre la forme complète de la distribution (densité) par groupe —
     révèle bimodalité, asymétrie, ce qu'une boîte à moustaches seule ne montre pas.
@@ -1042,7 +1291,7 @@ def violin(data: list, categories: list = None, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     n = len(data)
     categories = categories or [f"Groupe {i + 1}" for i in range(n)]
     positions = list(range(1, n + 1))
@@ -1053,15 +1302,15 @@ def violin(data: list, categories: list = None, titre="", sous_titre="",
         body.set_facecolor(color)
         body.set_edgecolor(color)
         body.set_alpha(0.75)
-    vp["cmedians"].set_color("#1A1C2E")
+    vp["cmedians"].set_color(_T["texte"])
     vp["cmedians"].set_linewidth(1.5)
 
     if afficher_boxplot:
         bp = ax.boxplot(data, positions=positions, widths=0.08, patch_artist=True,
                         showfliers=False, medianprops=dict(color=PALETTE[1], linewidth=2))
         for box in bp["boxes"]:
-            box.set_facecolor("white")
-            box.set_edgecolor("#6B6F85")
+            box.set_facecolor(_T["fond_neutre"])
+            box.set_edgecolor(_T["texte_dim"])
 
     ax.set_xticks(positions)
     ax.set_xticklabels(categories)
@@ -1082,7 +1331,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
               total_fin: float = None, label_debut="Début", label_fin="Total",
               titre="", sous_titre="", ylabel="", note="", couleur_pos=None,
               couleur_neg=None, couleur_total=None, connecteurs=True,
-              figsize=None, ax=None):
+              figsize=None, ax=None, format=None):
     """
     Graphique en cascade : montre comment des contributions positives et
     négatives successives transforment une valeur de départ en valeur finale.
@@ -1116,7 +1365,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     couleur_pos = couleur_pos or PALETTE[6]
     couleur_neg = couleur_neg or PALETTE[1]
     couleur_total = couleur_total or "#6B6F85"
@@ -1163,13 +1412,13 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
         for i in range(len(labels) - 1):
             y_connect = bottoms[i] + hauteurs[i]
             ax.plot([x[i] + 0.3, x[i + 1] - 0.3], [y_connect, y_connect],
-                    color="#D8DAE8", linewidth=1, linestyle="--", zorder=1)
+                    color=_T["grille"], linewidth=1, linestyle="--", zorder=1)
 
     plage = max(b + h for b, h in zip(bottoms, hauteurs)) * 0.02 or 1
     for xi, b, h, tot, val in zip(x, bottoms, hauteurs, est_total, vals_affiche):
         signe = "+" if (val > 0 and not tot) else ""
         ax.text(xi, b + h + plage, f"{signe}{val:,.0f}", ha="center", va="bottom",
-                fontsize=9.5, fontweight="bold", color="#2D2F3E")
+                fontsize=9.5, fontweight="bold", color=_T["texte"])
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=20 if len(labels) > 5 else 0, ha="right" if len(labels) > 5 else "center")
@@ -1187,8 +1436,9 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
-             xlabel="", note="", couleur=None, trier=True, ligne_ref: float = None,
-             label_ref="", taille_point=8, figsize=None, ax=None):
+             xlabel="", note="", couleur=None, fn_couleur=None, trier=True,
+             ligne_ref: float = None, label_ref="", taille_point=8,
+             figsize=None, ax=None, format=None):
     """
     Tige + point : classement de catégories, plus léger visuellement qu'une
     barre pleine quand on a beaucoup de catégories ou peu de place.
@@ -1219,7 +1469,7 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     couleur = couleur or PALETTE[0]
 
     paires = list(zip(categories, valeurs))
@@ -1228,18 +1478,22 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     categories_t, valeurs_t = (list(t) for t in zip(*paires)) if paires else ([], [])
     y_pos = np.arange(len(categories_t))
 
-    ax.hlines(y_pos, 0, valeurs_t, color="#D8DAE8", linewidth=1.6, zorder=2)
-    ax.plot(valeurs_t, y_pos, "o", color=couleur, markersize=taille_point, zorder=3)
+    ax.hlines(y_pos, 0, valeurs_t, color=_T["grille"], linewidth=1.6, zorder=2)
+    if fn_couleur is not None:
+        pts_couleurs = [fn_couleur(cat, val) for cat, val in zip(categories_t, valeurs_t)]
+        ax.scatter(valeurs_t, y_pos, c=pts_couleurs, s=taille_point ** 2, zorder=3)
+    else:
+        ax.plot(valeurs_t, y_pos, "o", color=couleur, markersize=taille_point, zorder=3)
 
     marge = (max(valeurs_t) * 0.03) if valeurs_t else 1
     for yi, val in zip(y_pos, valeurs_t):
         ax.text(val + marge, yi, f"{val:,.0f}", va="center", ha="left",
-                fontsize=9.5, fontweight="bold", color="#2D2F3E")
+                fontsize=9.5, fontweight="bold", color=_T["texte"])
 
     if ligne_ref is not None:
-        ax.axvline(ligne_ref, color="#6B6F85", linewidth=1.2, linestyle="--", zorder=1)
+        ax.axvline(ligne_ref, color=_T["texte_dim"], linewidth=1.2, linestyle="--", zorder=1)
         if label_ref:
-            ax.text(ligne_ref, -0.6, label_ref, fontsize=9, color="#6B6F85",
+            ax.text(ligne_ref, -0.6, label_ref, fontsize=9, color=_T["texte_dim"],
                     ha="center", va="top")
 
     ax.set_yticks(y_pos)
@@ -1262,7 +1516,7 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
 def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
           label_gauche="Avant", label_droite="Après", titre="", sous_titre="",
           note="", couleur_hausse=None, couleur_baisse=None, couleur_stable=None,
-          afficher_valeurs=True, focus: list = None, figsize=None, ax=None):
+          afficher_valeurs=True, focus: list = None, figsize=None, ax=None, format=None):
     """
     Deux colonnes de points reliés par des segments : montre, catégorie par
     catégorie, qui a progressé, régressé ou stagné entre deux périodes.
@@ -1294,7 +1548,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax)
+    fig, ax = _new_fig(figsize, ax=ax, format=format)
     couleur_hausse = couleur_hausse or PALETTE[6]
     couleur_baisse = couleur_baisse or PALETTE[1]
     couleur_stable = couleur_stable or "#A8ABBC"
@@ -1317,7 +1571,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
             alpha, lw, z = 0.9, 1.8, 3
 
         ax.plot([0, 1], [vg, vd], color=couleur, alpha=alpha, linewidth=lw, zorder=z,
-                marker="o", markersize=6, markerfacecolor=couleur, markeredgecolor="white")
+                marker="o", markersize=6, markerfacecolor=couleur, markeredgecolor=_T["fond_neutre"])
 
     toutes_valeurs = list(valeurs_gauche) + list(valeurs_droite)
     plage = (max(toutes_valeurs) - min(toutes_valeurs)) or 1
@@ -1335,7 +1589,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
                 val_str = f"{cote_valeurs[i]:,.0f}"
                 texte = f"{texte}  ({val_str})" if ha == "left" else f"({val_str})  {texte}"
             ax.text(x_pos, decales[i], texte, ha=ha, va="center", fontsize=9.5,
-                    color="#1A1C2E")
+                    color=_T["texte"])
 
     _placer_etiquettes(valeurs_gauche, -0.05, "right")
     _placer_etiquettes(valeurs_droite, 1.05, "left")
@@ -1361,7 +1615,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
 def facet(data, x: str = None, y: str = None, par: str = None,
           type_graphique="ligne", ncols=3, meme_echelle=True, titre="",
           sous_titre="", note="", partager_legende=True, figsize=None, ax=None,
-          **kwargs):
+          format=None, **kwargs):
     """
     Petits multiples : répète le même graphique pour chaque valeur unique de
     `par`, sur une grille, pour comparer des sous-groupes côte à côte.
@@ -1394,6 +1648,7 @@ def facet(data, x: str = None, y: str = None, par: str = None,
     -------
     >>> facet(df, x="Mois", y="Ventes", par="Region", type_graphique="barres")
     """
+    figsize = _resoudre_figsize(figsize, format)
     _fn_map = {"ligne": ligne, "barres": barres, "histogramme": histogramme, "nuage": nuage}
     fn = _fn_map.get(type_graphique)
     if fn is None:
@@ -1443,7 +1698,7 @@ def facet(data, x: str = None, y: str = None, par: str = None,
         elif type_graphique == "histogramme":
             fn(data=y_vals, ax=ax_i, **kwargs)
 
-        ax_i.set_title(str(groupe), fontsize=10, fontweight="bold", color="#1A1C2E")
+        ax_i.set_title(str(groupe), fontsize=10, fontweight="bold", color=_T["texte"])
         if col != 0:
             ax_i.set_ylabel("")
         if not partager_legende:
@@ -1458,11 +1713,11 @@ def facet(data, x: str = None, y: str = None, par: str = None,
             a.set_ylim(min(ymins), max(ymaxs))
 
     if titre:
-        fig.suptitle(titre, fontsize=15, fontweight="bold", color="#1A1C2E", y=1.02)
+        fig.suptitle(titre, fontsize=15, fontweight="bold", color=_T["texte"], y=1.02)
     if sous_titre:
-        fig.text(0.01, 0.965, sous_titre, fontsize=10, color="#6B6F85")
+        fig.text(0.01, 0.965, sous_titre, fontsize=10, color=_T["texte_dim"])
     if note:
-        fig.text(0.01, -0.02, note, fontsize=8, color="#9295A8", style="italic")
+        fig.text(0.01, -0.02, note, fontsize=8, color=_T["texte_dim"], style="italic")
 
     fig.tight_layout()
     return fig, np.array(axes[:n])
@@ -1472,7 +1727,7 @@ def facet(data, x: str = None, y: str = None, par: str = None,
 # ⑱ Dashboard multi-graphiques
 # ══════════════════════════════════════════════════════════════════════════════
 
-def dashboard(configs: list, titre_global="", ncols=2, figsize=None):
+def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None):
     """
     Génère une grille de graphiques dans une seule figure.
 
@@ -1497,6 +1752,7 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None):
     ...      "titre": "KPI"},
     ... ], titre_global="Tableau de bord Q1")
     """
+    figsize = _resoudre_figsize(figsize, format)
     n = len(configs)
     nrows = (n + ncols - 1) // ncols
     fig = plt.figure(figsize=figsize or (ncols * 6, nrows * 4.2))
@@ -1531,5 +1787,183 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None):
 
     if titre_global:
         fig.suptitle(titre_global, fontsize=18, fontweight="bold",
-                     color="#1A1C2E", y=1.02)
+                     color=_T["texte"], y=1.02)
     return fig, np.array(axes[:n])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Layout rapport / slide
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _dessiner_kpi(ax, kpi: dict) -> None:
+    """
+    Dessine une tuile KPI dans l'axe fourni.
+
+    Clés reconnues dans *kpi*
+    -------------------------
+    label   : libellé de la métrique (affiché en petites capitales)
+    valeur  : valeur principale déjà formatée (ex: ``"1,24 M"`` ou ``"23 %"``)
+    delta   : variation (ex: ``"+12 %"``, ``"−2 pts"``) — optionnel
+    positif : ``True`` → delta vert, ``False`` → delta rouge  (défaut ``True``)
+    icone   : caractère ou emoji placé avant la valeur (optionnel)
+    """
+    ax.set_facecolor(_T["bg"])
+    for sp in ax.spines.values():
+        sp.set_visible(True)
+        sp.set_linewidth(0.8)
+        sp.set_edgecolor(_T["grille"])
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    label   = str(kpi.get("label",   ""))
+    valeur  = str(kpi.get("valeur",  "—"))
+    delta   = str(kpi.get("delta",   ""))
+    positif = kpi.get("positif", True)
+    icone   = str(kpi.get("icone",   ""))
+
+    txt_valeur = f"{icone} {valeur}".strip() if icone else valeur
+
+    # Label (en haut, petites capitales visuelles)
+    if label:
+        ax.text(0.5, 0.84, label.upper(), transform=ax.transAxes,
+                fontsize=7.5, color=_T["texte_dim"], ha="center", va="center",
+                fontweight="bold")
+
+    # Valeur principale
+    ax.text(0.5, 0.50, txt_valeur, transform=ax.transAxes,
+            fontsize=21, color=_T["texte"], ha="center", va="center",
+            fontweight="bold")
+
+    # Delta avec flèche colorée
+    if delta:
+        signe = "▲" if positif else "▼"
+        couleur_delta = "#2DC653" if positif else "#E63946"
+        ax.text(0.5, 0.14, f"{signe} {delta}", transform=ax.transAxes,
+                fontsize=9.5, color=couleur_delta, ha="center", va="center",
+                fontweight="bold")
+
+
+def layout_rapport(titre="", sous_titre="", note="", kpis=None,
+                   n_graphiques=1, figsize=None, format="slide"):
+    """
+    Gabarit slide/rapport prêt à l'emploi : titre, tuiles KPI et zone(s) graphique.
+
+    Le layout est organisé en deux rangées sur une grille de 12 colonnes :
+
+    * **Rangée 0** (≈ 25 % de hauteur) — titre à gauche + tuiles KPI à droite.
+    * **Rangée 1** (≈ 75 % de hauteur) — un ou plusieurs axes graphiques.
+
+    Parameters
+    ----------
+    titre        : Titre principal de la page.
+    sous_titre   : Ligne descriptive sous le titre.
+    note         : Note de bas de page (source, date…).
+    kpis         : Liste de dicts décrivant les tuiles métriques.
+                   Chaque dict peut contenir :
+                   ``label``, ``valeur``, ``delta``, ``positif``, ``icone``.
+    n_graphiques : Nombre de zones graphique (1, 2 ou 3).
+    figsize      : Taille de figure explicite — prioritaire sur *format*.
+    format       : Preset de taille (``"slide"``, ``"a4"``, ``"large"``…).
+
+    Returns
+    -------
+    ``(fig, zones)`` où *zones* est un dict :
+
+    * ``zones["graphiques"]`` — liste d'axes prêts à recevoir vos graphiques
+      via le paramètre ``ax=``.
+    * ``zones["kpis"]`` — liste des axes tuile (pour surcharge éventuelle).
+
+    Exemple
+    -------
+    >>> fig, zones = layout_rapport(
+    ...     titre="Performance commerciale Q4 2024",
+    ...     sous_titre="Résultats consolidés — 4 villes",
+    ...     kpis=[
+    ...         {"label": "Ventes",   "valeur": "1,24 M", "delta": "+12 %", "positif": True},
+    ...         {"label": "Clients",  "valeur": "4 832",  "delta": "+5 %",  "positif": True},
+    ...         {"label": "Marge",    "valeur": "23 %",   "delta": "−2 pts","positif": False},
+    ...     ],
+    ...     n_graphiques=2,
+    ...     format="slide",
+    ... )
+    >>> barres(mois, ventes, titre="Ventes par mois", ax=zones["graphiques"][0])
+    >>> ligne(mois, {"Douala": v1, "Yaoundé": v2}, ax=zones["graphiques"][1])
+    >>> plt.show()
+    """
+    if kpis is None:
+        kpis = []
+
+    n_kpis = len(kpis)
+    n_graphiques = max(1, min(int(n_graphiques), 3))
+
+    NCOLS = 12
+    # 2 colonnes par tuile KPI (max 8 colonnes pour les KPIs)
+    kpi_cols  = min(n_kpis * 2, 8)
+    title_cols = NCOLS - kpi_cols  # colonnes restantes pour le titre
+
+    fig_size = _resoudre_figsize(figsize, format) or FORMATS["slide"]
+    fig = plt.figure(figsize=fig_size)
+    fig.patch.set_facecolor(_T["bg"])
+
+    has_header = bool(titre or sous_titre or n_kpis > 0)
+
+    if has_header:
+        gs = fig.add_gridspec(
+            2, NCOLS,
+            height_ratios=[1.2, 4.2],
+            hspace=0.08, wspace=0.06,
+            left=0.03, right=0.97,
+            top=0.97, bottom=0.05,
+        )
+        chart_row = 1
+    else:
+        gs = fig.add_gridspec(
+            1, NCOLS,
+            hspace=0.0, wspace=0.06,
+            left=0.03, right=0.97,
+            top=0.97, bottom=0.05,
+        )
+        chart_row = 0
+
+    # ── Zone titre ────────────────────────────────────────────────────────
+    axes_kpis = []
+    if has_header:
+        ax_h = fig.add_subplot(gs[0, :title_cols])
+        ax_h.set_facecolor(_T["bg"])
+        ax_h.set_axis_off()
+
+        if titre:
+            ax_h.text(0.0, 0.88, titre, transform=ax_h.transAxes,
+                      fontsize=17, fontweight="bold", color=_T["texte"],
+                      va="top", ha="left")
+        if sous_titre:
+            ax_h.text(0.0, 0.28, sous_titre, transform=ax_h.transAxes,
+                      fontsize=10, color=_T["texte_dim"],
+                      va="center", ha="left")
+
+        # ── Tuiles KPI ────────────────────────────────────────────────────
+        if n_kpis > 0:
+            largeur = kpi_cols // n_kpis
+            for i, kpi in enumerate(kpis):
+                c0 = title_cols + i * largeur
+                c1 = title_cols + (i + 1) * largeur if i < n_kpis - 1 else NCOLS
+                ax_k = fig.add_subplot(gs[0, c0:c1])
+                _dessiner_kpi(ax_k, kpi)
+                axes_kpis.append(ax_k)
+
+    # ── Axes graphiques ───────────────────────────────────────────────────
+    chart_largeur = NCOLS // n_graphiques
+    axes_charts = []
+    for j in range(n_graphiques):
+        c0 = j * chart_largeur
+        c1 = (j + 1) * chart_largeur if j < n_graphiques - 1 else NCOLS
+        ax_c = fig.add_subplot(gs[chart_row, c0:c1])
+        ax_c.set_facecolor(_T["bg"])
+        axes_charts.append(ax_c)
+
+    # ── Note de bas de page ───────────────────────────────────────────────
+    if note:
+        fig.text(0.03, 0.01, note, fontsize=8, color=_T["texte_dim"],
+                 style="italic", transform=fig.transFigure)
+
+    return fig, {"graphiques": axes_charts, "kpis": axes_kpis}

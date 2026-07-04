@@ -120,7 +120,7 @@ def palette_focus(n_total, indices_focus, accent=ACCENT_DEFAUT):
 def barres_focus(categories, valeurs, focus,
                  titre="", sous_titre="", note="",
                  accent=ACCENT_DEFAUT, horizontal=False,
-                 fmt="{:.0f}", figsize=None):
+                 fmt="{:.0f}", figsize=None, format=None):
     """
     Barres en gris neutre sauf les éléments en `focus` qui reçoivent la couleur
     d'accent. Le regard va directement là où l'analyse veut l'emmener.
@@ -145,6 +145,8 @@ def barres_focus(categories, valeurs, focus,
     ...     accent=ACCENTS["rouge"]
     ... )
     """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize)
     colors = palette_focus(len(categories), focus, accent)
     alphas = [1.0 if c == accent else 0.45 for c in colors]
@@ -211,7 +213,7 @@ def barres_focus(categories, valeurs, focus,
 def ligne_focus(x, series: dict, focus_serie,
                 titre="", sous_titre="", note="",
                 accent=ACCENT_DEFAUT, markers=True,
-                annoter_fin=True, figsize=None):
+                annoter_fin=True, figsize=None, format=None):
     """
     Graphique multi-lignes où une série est mise en avant (couleur + épaisseur),
     les autres passent en gris semi-transparent — elles donnent le contexte
@@ -233,6 +235,8 @@ def ligne_focus(x, series: dict, focus_serie,
     ...     accent=ACCENTS["vert"]
     ... )
     """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize)
     ax.grid(axis="y", color=GRIS_CLAIR, lw=0.6, ls="--", alpha=0.7)
 
@@ -276,7 +280,7 @@ def ligne_focus(x, series: dict, focus_serie,
 def comparaison_avant_apres(categories, avant, apres,
                             label_avant="Avant", label_apres="Après",
                             titre="", sous_titre="", note="",
-                            accent=ACCENT_DEFAUT, figsize=None):
+                            accent=ACCENT_DEFAUT, figsize=None, format=None):
     """
     Barres doubles "Avant / Après" avec :
     - L'avant en gris neutre
@@ -294,6 +298,10 @@ def comparaison_avant_apres(categories, avant, apres,
     ...     label_avant="Avant refonte", label_apres="Après refonte"
     ... )
     """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize)
     n = len(categories)
     x = np.arange(n)
@@ -346,7 +354,7 @@ def comparaison_avant_apres(categories, avant, apres,
 def barres_ranked(categories, valeurs,
                   titre="", sous_titre="", note="",
                   accent=ACCENT_DEFAUT, top_n=3,
-                  fmt="{:.0f}", figsize=None):
+                  fmt="{:.0f}", figsize=None, format=None):
     """
     Classement horizontal trié — le Top N reçoit l'accent, le reste s'efface
     progressivement via l'opacité (hiérarchie par rang).
@@ -368,7 +376,8 @@ def barres_ranked(categories, valeurs,
     cats_s  = [categories[i] for i in order]
     vals_s  = [valeurs[i]    for i in order]
     n       = len(vals_s)
-
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize or (10, max(4, n * 0.55)))
     ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
     ax.grid(axis="y", visible=False)
@@ -418,7 +427,7 @@ def barres_ranked(categories, valeurs,
 def divergent(categories, valeurs,
               titre="", sous_titre="", note="",
               accent_pos=ACCENTS["vert"], accent_neg=ACCENTS["rouge"],
-              fmt="{:+.1f}", figsize=None):
+              fmt="{:+.1f}", figsize=None, format=None):
     """
     Barres divergentes centrées sur zéro — parfait pour les deltas,
     NPS, balance commerciale, évolutions positives/négatives.
@@ -432,6 +441,8 @@ def divergent(categories, valeurs,
     ...     fmt="{:+.1f} pts"
     ... )
     """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize)
     ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
     ax.grid(axis="y", visible=False)
@@ -464,7 +475,7 @@ def divergent(categories, valeurs,
 
 def bullet_chart(kpis: list,
                  titre="", sous_titre="", note="",
-                 accent=ACCENT_DEFAUT, figsize=None):
+                 accent=ACCENT_DEFAUT, figsize=None, format=None):
     """
     Bullet charts (Stephen Few) — représentation compacte et honnête
     d'un KPI face à son objectif et à ses plages de performance.
@@ -490,6 +501,8 @@ def bullet_chart(kpis: list,
     ... ], titre="Performance commerciale vs objectifs Q4")
     """
     n = len(kpis)
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, axes = plt.subplots(n, 1, figsize=figsize or (10, n * 1.4 + 0.8))
     fig.patch.set_facecolor(BG)
     if n == 1:
@@ -664,7 +677,7 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
                       couleurs: list = None, groupes: dict = None,
                       afficher_delta=True, fmt_delta="{:+.0f}", fmt_valeur="{:.0f}",
                       accent_pos=None, accent_neg=None,
-                      titre="", sous_titre="", note="", figsize=None):
+                      titre="", sous_titre="", note="", figsize=None, format=None):
     """
     Pour chaque entité, affiche N barres chronologiques (une par période)
     reliées par une ligne suivant le sommet des barres. Les variations entre
@@ -690,7 +703,7 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
     """
     if couleurs is None:
         import beau_graphique as bg
-        couleurs = bg.PALETTE
+        couleurs = bg._palette_pour(categories)
     accent_pos = accent_pos or ACCENTS["vert"]
     accent_neg = accent_neg or ACCENTS["rouge"]
 
@@ -704,7 +717,8 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
     positions = {(i, j): i * pas_groupe + j * pas_barre
                  for i in range(n_cat) for j in range(n_per)}
     ymax_global = max(max(row) for row in valeurs)
-
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
     fig, ax = _init_ax(figsize or (max(10, n_cat * n_per * 0.9), 6))
 
     for i, cat in enumerate(categories):
