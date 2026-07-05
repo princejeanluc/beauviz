@@ -536,18 +536,19 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
-                    xlabel="", ylabel="", note="", figsize=None, ax=None, format=None,
-                    background=None, **_extra):
+                    xlabel="", ylabel="", note="", empile=False, normalise=False,
+                    figsize=None, ax=None, format=None, background=None, **_extra):
     """
-    Barres groupées multi-séries.
+    Barres groupées, empilées ou normalisées (100 %) multi-séries.
 
     Parameters
     ----------
     categories : Étiquettes de l'axe X
     groupes    : dict {"Groupe A": [v1, v2, …], "Groupe B": [v1, v2, …]}
+    empile     : True → barres empilées (valeurs absolues)
+    normalise  : True → barres empilées normalisées à 100 % (implique empile=True)
     **_extra   : clés ignorées — permet d'appeler barres_groupees(**depuis_df(...))
                  même si le dict contient des clés destinées à d'autres fonctions
-                 (x, y_series, valeurs)
 
     Exemple
     -------
@@ -557,28 +558,62 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
     ...     titre="Comparaison trimestrielle",
     ...     ylabel="Ventes (k€)"
     ... )
+    >>> barres_groupees(
+    ...     categories=["T1", "T2", "T3", "T4"],
+    ...     groupes={"Mobile": [40, 50, 55, 60], "Desktop": [60, 50, 45, 40]},
+    ...     empile=True, normalise=True,
+    ...     titre="Répartition du trafic (%)",
+    ... )
     """
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     n_groupes = len(groupes)
     x = np.arange(len(categories))
-    width = 0.7 / n_groupes
     couleurs_groupes = _palette_pour(list(groupes.keys()))
 
-    for i, (nom, vals) in enumerate(groupes.items()):
-        offset = (i - n_groupes / 2 + 0.5) * width
-        bars = ax.bar(x + offset, vals, width * 0.9, label=nom,
-                      color=couleurs_groupes[i])
-        for bar, val in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + max(max(v) for v in groupes.values()) * 0.01,
-                    f"{val}", ha="center", va="bottom", fontsize=8.5, color=_T["texte"])
+    if empile or normalise:
+        series = {nom: np.array(vals, dtype=float) for nom, vals in groupes.items()}
+        if normalise:
+            totaux = sum(series.values())
+            totaux = np.where(totaux == 0, 1, totaux)
+            series = {nom: vals / totaux * 100 for nom, vals in series.items()}
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(categories)
-    ax.set_ylim(0, max(max(v) for v in groupes.values()) * 1.18)
-    ax.yaxis.set_visible(False)
-    ax.spines["left"].set_visible(False)
+        bottom = np.zeros(len(categories))
+        for i, (nom, vals) in enumerate(series.items()):
+            ax.bar(x, vals, bottom=bottom, width=0.6, label=nom,
+                   color=couleurs_groupes[i])
+            for xi, (v, b) in enumerate(zip(vals, bottom)):
+                if v > (3 if normalise else max(max(s) for s in series.values()) * 0.06):
+                    ax.text(xi, b + v / 2, f"{v:.0f}{'%' if normalise else ''}",
+                            ha="center", va="center", fontsize=8, color=_T["fond_neutre"],
+                            fontweight="bold")
+            bottom += vals
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories)
+        if normalise:
+            ax.set_ylim(0, 100)
+            ax.yaxis.set_visible(False)
+        else:
+            ax.set_ylim(0, bottom.max() * 1.12)
+            ax.yaxis.set_visible(False)
+        ax.spines["left"].set_visible(False)
+    else:
+        width = 0.7 / n_groupes
+        for i, (nom, vals) in enumerate(groupes.items()):
+            offset = (i - n_groupes / 2 + 0.5) * width
+            bars = ax.bar(x + offset, vals, width * 0.9, label=nom,
+                          color=couleurs_groupes[i])
+            for bar, val in zip(bars, vals):
+                ax.text(bar.get_x() + bar.get_width() / 2,
+                        bar.get_height() + max(max(v) for v in groupes.values()) * 0.01,
+                        f"{val}", ha="center", va="bottom", fontsize=8.5, color=_T["texte"])
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories)
+        ax.set_ylim(0, max(max(v) for v in groupes.values()) * 1.18)
+        ax.yaxis.set_visible(False)
+        ax.spines["left"].set_visible(False)
 
     return _finalize(ax, titre, sous_titre, xlabel, ylabel, note, fig=fig,
                      ajuster_layout=ajuster_layout)

@@ -22,6 +22,9 @@ Usage
 
 Chaque fonction accepte les mêmes kwargs de base (titre, sous_titre, note, figsize)
 et ajoute des paramètres narratifs spécifiques.
+
+Toutes les fonctions respectent le thème actif (bg.init(theme=...)) et acceptent
+background= pour un fond transparent ou personnalisé.
 """
 
 import matplotlib.pyplot as plt
@@ -29,14 +32,6 @@ import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 import numpy as np
 import os
-
-# ── Couleurs système ──────────────────────────────────────────────────────────
-BG          = "#F7F8FC"        # fond global
-GRIS_FORT   = "#6B6F85"        # texte secondaire, axes
-GRIS_MOY    = "#A8ABBC"        # lignes de contexte, séries non-focus
-GRIS_CLAIR  = "#D8DAE8"        # fonds de zone, grille
-TEXTE       = "#1A1C2E"        # texte principal
-TEXTE_DOUX  = "#4A4D6A"        # annotations subtiles
 
 # Accents disponibles — à choisir selon le message
 ACCENTS = {
@@ -59,31 +54,39 @@ _STYLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beau_gra
 # Utilitaires internes
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _init_ax(figsize):
+def _t():
+    """Retourne le thème actif de beau_graphique (lecture dynamique)."""
+    import beau_graphique as _bg
+    return _bg._T
+
+
+def _init_ax(figsize, background=None):
+    """Crée une figure/axe stylée en lisant le thème actif."""
+    import beau_graphique as _bg
     fig, ax = plt.subplots(figsize=figsize or (11, 5.5))
-    fig.patch.set_facecolor(BG)
-    ax.set_facecolor(BG)
+    _bg._appliquer_background(fig, ax, background)
+    T = _t()
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color(GRIS_CLAIR)
-    ax.spines["bottom"].set_color(GRIS_CLAIR)
-    ax.tick_params(colors=GRIS_FORT, length=0)
-    ax.grid(axis="y", color=GRIS_CLAIR, linewidth=0.7, linestyle="--", alpha=0.8)
+    ax.spines["left"].set_color(T["grille"])
+    ax.spines["bottom"].set_color(T["grille"])
+    ax.tick_params(colors=T["texte_dim"], length=0)
+    ax.grid(axis="y", color=T["grille"], linewidth=0.7, linestyle="--", alpha=0.8)
     return fig, ax
 
 
 def _header(fig, ax, titre, sous_titre, note):
     """Titre affirmatif + sous-titre descriptif + note de source."""
+    T = _t()
     if titre:
-        ax.set_title(titre, fontsize=14, fontweight="bold", color=TEXTE,
+        ax.set_title(titre, fontsize=14, fontweight="bold", color=T["texte"],
                      pad=12, loc="left")
     if sous_titre:
-        # sous-titre positionné juste sous le titre, en gris doux
         ax.annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                     xytext=(0, 28), textcoords="offset points",
-                    fontsize=10, color=GRIS_FORT, annotation_clip=False)
+                    fontsize=10, color=T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, 0.01, note, fontsize=8, color=GRIS_MOY,
+        fig.text(0.01, 0.01, note, fontsize=8, color=T["serie_dim"],
                  style="italic", transform=fig.transFigure)
 
 
@@ -110,7 +113,8 @@ def palette_focus(n_total, indices_focus, accent=ACCENT_DEFAUT):
     """
     if isinstance(indices_focus, int):
         indices_focus = [indices_focus]
-    return [accent if i in indices_focus else GRIS_MOY for i in range(n_total)]
+    gris = _t()["serie_dim"]
+    return [accent if i in indices_focus else gris for i in range(n_total)]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -120,7 +124,7 @@ def palette_focus(n_total, indices_focus, accent=ACCENT_DEFAUT):
 def barres_focus(categories, valeurs, focus,
                  titre="", sous_titre="", note="",
                  accent=ACCENT_DEFAUT, horizontal=False,
-                 fmt="{:.0f}", figsize=None, format=None):
+                 fmt="{:.0f}", figsize=None, format=None, background=None):
     """
     Barres en gris neutre sauf les éléments en `focus` qui reçoivent la couleur
     d'accent. Le regard va directement là où l'analyse veut l'emmener.
@@ -147,7 +151,8 @@ def barres_focus(categories, valeurs, focus,
     """
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize)
+    T = _t()
+    fig, ax = _init_ax(figsize, background)
     colors = palette_focus(len(categories), focus, accent)
     alphas = [1.0 if c == accent else 0.45 for c in colors]
 
@@ -156,37 +161,32 @@ def barres_focus(categories, valeurs, focus,
 
     if horizontal:
         ax.spines["bottom"].set_visible(False)
-        ax.spines["left"].set_color(GRIS_CLAIR)
-        ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+        ax.spines["left"].set_color(T["grille"])
+        ax.grid(axis="x", color=T["grille"], lw=0.7, ls="--", alpha=0.8)
         ax.grid(axis="y", visible=False)
         for i, (cat, val, col, alpha) in enumerate(zip(categories, valeurs, colors, alphas)):
             ax.barh(cat, val, color=col, alpha=alpha, height=0.55)
-            lw = 2.5 if i in focus else 0
             weight = "bold" if i in focus else "normal"
             size = 10.5 if i in focus else 9
-            fc = TEXTE if i in focus else GRIS_FORT
+            fc = T["texte"] if i in focus else T["texte_dim"]
             ax.text(val + max(valeurs) * 0.01, i,
                     fmt.format(val), va="center", ha="left",
                     fontsize=size, fontweight=weight, color=fc)
         ax.set_xlim(0, max(valeurs) * 1.18)
         ax.xaxis.set_visible(False)
         ax.invert_yaxis()
-        # Étiquettes Y — focus en gras foncé
-        for i, (label, ytick) in enumerate(zip(categories, ax.get_yticklabels())):
-            pass
-        labels_y = ax.get_yticklabels()
         for i, lbl in enumerate(ax.yaxis.get_ticklabels()):
             if i in focus:
                 lbl.set_fontweight("bold")
-                lbl.set_color(TEXTE)
+                lbl.set_color(T["texte"])
             else:
-                lbl.set_color(GRIS_FORT)
+                lbl.set_color(T["texte_dim"])
     else:
         for i, (cat, val, col, alpha) in enumerate(zip(categories, valeurs, colors, alphas)):
             ax.bar(i, val, color=col, alpha=alpha, width=0.55)
             weight = "bold" if i in focus else "normal"
             size = 10.5 if i in focus else 9
-            fc = TEXTE if i in focus else GRIS_FORT
+            fc = T["texte"] if i in focus else T["texte_dim"]
             ax.text(i, val + max(valeurs) * 0.012,
                     fmt.format(val), ha="center", va="bottom",
                     fontsize=size, fontweight=weight, color=fc)
@@ -195,9 +195,9 @@ def barres_focus(categories, valeurs, focus,
         for i, lbl in enumerate(ax.xaxis.get_ticklabels()):
             if i in focus:
                 lbl.set_fontweight("bold")
-                lbl.set_color(TEXTE)
+                lbl.set_color(T["texte"])
             else:
-                lbl.set_color(GRIS_FORT)
+                lbl.set_color(T["texte_dim"])
         ax.set_ylim(0, max(valeurs) * 1.2)
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
@@ -213,7 +213,7 @@ def barres_focus(categories, valeurs, focus,
 def ligne_focus(x, series: dict, focus_serie,
                 titre="", sous_titre="", note="",
                 accent=ACCENT_DEFAUT, markers=True,
-                annoter_fin=True, figsize=None, format=None):
+                annoter_fin=True, figsize=None, format=None, background=None):
     """
     Graphique multi-lignes où une série est mise en avant (couleur + épaisseur),
     les autres passent en gris semi-transparent — elles donnent le contexte
@@ -237,29 +237,28 @@ def ligne_focus(x, series: dict, focus_serie,
     """
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize)
-    ax.grid(axis="y", color=GRIS_CLAIR, lw=0.6, ls="--", alpha=0.7)
+    T = _t()
+    fig, ax = _init_ax(figsize, background)
+    ax.grid(axis="y", color=T["grille"], lw=0.6, ls="--", alpha=0.7)
 
     x_arr = list(range(len(x))) if not isinstance(x[0], (int, float)) else x
     x_labels = x if not isinstance(x[0], (int, float)) else None
 
-    # Passe 1 : séries contexte (gris, fines, semi-transparentes)
     for nom, vals in series.items():
         if nom == focus_serie:
             continue
-        ax.plot(x_arr, vals, color=GRIS_MOY, lw=1.4, alpha=0.55,
+        ax.plot(x_arr, vals, color=T["serie_dim"], lw=1.4, alpha=0.55,
                 marker=("o" if markers else None),
-                mfc=BG, mec=GRIS_MOY, mew=1.2, ms=4, zorder=2)
+                mfc=T["bg"], mec=T["serie_dim"], mew=1.2, ms=4, zorder=2)
         if annoter_fin:
             ax.annotate(nom, xy=(x_arr[-1], vals[-1]),
                         xytext=(5, 0), textcoords="offset points",
-                        fontsize=8.5, color=GRIS_FORT, va="center")
+                        fontsize=8.5, color=T["texte_dim"], va="center")
 
-    # Passe 2 : série focus (couleur accent, épaisse, zorder élevé)
     vals_focus = series[focus_serie]
     ax.plot(x_arr, vals_focus, color=accent, lw=3.0, zorder=4,
             marker=("o" if markers else None),
-            mfc=BG, mec=accent, mew=2.2, ms=7)
+            mfc=T["bg"], mec=accent, mew=2.2, ms=7)
     if annoter_fin:
         ax.annotate(focus_serie, xy=(x_arr[-1], vals_focus[-1]),
                     xytext=(7, 0), textcoords="offset points",
@@ -267,7 +266,7 @@ def ligne_focus(x, series: dict, focus_serie,
 
     if x_labels:
         ax.set_xticks(x_arr)
-        ax.set_xticklabels(x_labels, color=GRIS_FORT)
+        ax.set_xticklabels(x_labels, color=T["texte_dim"])
 
     _header(fig, ax, titre, sous_titre, note)
     return _finalize(fig), ax
@@ -280,7 +279,8 @@ def ligne_focus(x, series: dict, focus_serie,
 def comparaison_avant_apres(categories, avant, apres,
                             label_avant="Avant", label_apres="Après",
                             titre="", sous_titre="", note="",
-                            accent=ACCENT_DEFAUT, figsize=None, format=None):
+                            accent=ACCENT_DEFAUT, figsize=None, format=None,
+                            background=None):
     """
     Barres doubles "Avant / Après" avec :
     - L'avant en gris neutre
@@ -300,29 +300,22 @@ def comparaison_avant_apres(categories, avant, apres,
     """
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
-    import beau_graphique as _bg
-    figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize)
+    T = _t()
+    fig, ax = _init_ax(figsize, background)
     n = len(categories)
     x = np.arange(n)
     w = 0.32
 
-    # Avant = gris
-    ax.bar(x - w/2, avant, width=w, color=GRIS_MOY, alpha=0.6, label=label_avant)
-    # Après = accent
+    ax.bar(x - w/2, avant, width=w, color=T["serie_dim"], alpha=0.6, label=label_avant)
     ax.bar(x + w/2, apres, width=w, color=accent, alpha=0.9, label=label_apres)
 
     ymax = max(max(avant), max(apres))
 
-    # Étiquettes et deltas
     for i, (a, b) in enumerate(zip(avant, apres)):
-        # valeur avant
         ax.text(i - w/2, a + ymax*0.01, f"{a}", ha="center", va="bottom",
-                fontsize=9, color=GRIS_FORT)
-        # valeur après
+                fontsize=9, color=T["texte_dim"])
         ax.text(i + w/2, b + ymax*0.01, f"{b}", ha="center", va="bottom",
-                fontsize=10, fontweight="bold", color=TEXTE)
-        # delta
+                fontsize=10, fontweight="bold", color=T["texte"])
         delta = b - a
         pct   = (delta / a * 100) if a != 0 else 0
         sign  = "+" if delta >= 0 else ""
@@ -330,18 +323,17 @@ def comparaison_avant_apres(categories, avant, apres,
         ax.text(i, max(a, b) + ymax*0.085,
                 f"{sign}{pct:.0f}%", ha="center", va="bottom",
                 fontsize=10, fontweight="bold", color=color_delta)
-        # petite flèche montante / descendante
         arrow = "▲" if delta >= 0 else "▼"
         ax.text(i, max(a, b) + ymax*0.055, arrow,
                 ha="center", va="bottom", fontsize=9, color=color_delta)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(categories, color=TEXTE_DOUX, fontsize=10)
+    ax.set_xticklabels(categories, color=T["texte_dim"], fontsize=10)
     ax.set_ylim(0, ymax * 1.28)
     ax.yaxis.set_visible(False)
     ax.spines["left"].set_visible(False)
     ax.legend(frameon=False, fontsize=9.5, loc="upper left",
-              labelcolor=GRIS_FORT)
+              labelcolor=T["texte_dim"])
 
     _header(fig, ax, titre, sous_titre, note)
     return _finalize(fig), ax
@@ -354,7 +346,7 @@ def comparaison_avant_apres(categories, avant, apres,
 def barres_ranked(categories, valeurs,
                   titre="", sous_titre="", note="",
                   accent=ACCENT_DEFAUT, top_n=3,
-                  fmt="{:.0f}", figsize=None, format=None):
+                  fmt="{:.0f}", figsize=None, format=None, background=None):
     """
     Classement horizontal trié — le Top N reçoit l'accent, le reste s'efface
     progressivement via l'opacité (hiérarchie par rang).
@@ -371,42 +363,39 @@ def barres_ranked(categories, valeurs,
     ...     top_n=3, accent=ACCENTS["or"]
     ... )
     """
-    # Tri décroissant
     order = np.argsort(valeurs)[::-1]
     cats_s  = [categories[i] for i in order]
     vals_s  = [valeurs[i]    for i in order]
     n       = len(vals_s)
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize or (10, max(4, n * 0.55)))
-    ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+    T = _t()
+    fig, ax = _init_ax(figsize or (10, max(4, n * 0.55)), background)
+    ax.grid(axis="x", color=T["grille"], lw=0.7, ls="--", alpha=0.8)
     ax.grid(axis="y", visible=False)
     ax.spines["left"].set_visible(False)
-    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.spines["bottom"].set_color(T["grille"])
     ax.xaxis.set_visible(False)
 
     for i, (cat, val) in enumerate(zip(cats_s, vals_s)):
         if i < top_n:
             color = accent
-            alpha = 1.0 - i * 0.12            # dégradé subtil même dans le top
+            alpha = 1.0 - i * 0.12
             fw    = "bold"
             fsize = 10.5
-            fc    = TEXTE
+            fc    = T["texte"]
         else:
-            # Gris de plus en plus clair selon le rang
             fade  = min(0.65, 0.25 + (i - top_n) * 0.08)
-            color = GRIS_MOY
+            color = T["serie_dim"]
             alpha = fade
             fw    = "normal"
             fsize = 9
-            fc    = GRIS_FORT
+            fc    = T["texte_dim"]
 
         ax.barh(n - i - 1, val, color=color, alpha=alpha, height=0.62)
-        # Valeur à droite de la barre
         ax.text(val + max(vals_s) * 0.01, n - i - 1,
                 fmt.format(val), va="center", ha="left",
                 fontsize=fsize, fontweight=fw, color=fc)
-        # Médaille pour le podium
         prefix = {0: "① ", 1: "② ", 2: "③ "}.get(i, "   ")
         ax.text(-max(vals_s) * 0.01, n - i - 1,
                 prefix + cat, va="center", ha="right",
@@ -427,7 +416,7 @@ def barres_ranked(categories, valeurs,
 def divergent(categories, valeurs,
               titre="", sous_titre="", note="",
               accent_pos=ACCENTS["vert"], accent_neg=ACCENTS["rouge"],
-              fmt="{:+.1f}", figsize=None, format=None):
+              fmt="{:+.1f}", figsize=None, format=None, background=None):
     """
     Barres divergentes centrées sur zéro — parfait pour les deltas,
     NPS, balance commerciale, évolutions positives/négatives.
@@ -443,8 +432,9 @@ def divergent(categories, valeurs,
     """
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize)
-    ax.grid(axis="x", color=GRIS_CLAIR, lw=0.7, ls="--", alpha=0.8)
+    T = _t()
+    fig, ax = _init_ax(figsize, background)
+    ax.grid(axis="x", color=T["grille"], lw=0.7, ls="--", alpha=0.8)
     ax.grid(axis="y", visible=False)
 
     y_pos = np.arange(len(categories))
@@ -456,13 +446,13 @@ def divergent(categories, valeurs,
         x_pos = val + (offset if val >= 0 else -offset)
         ax.text(x_pos, i, fmt.format(val),
                 va="center", ha=ha, fontsize=9.5,
-                fontweight="bold", color=TEXTE)
+                fontweight="bold", color=T["texte"])
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(categories, color=GRIS_FORT, fontsize=10)
-    ax.axvline(0, color=GRIS_FORT, lw=1.0, zorder=5)
+    ax.set_yticklabels(categories, color=T["texte_dim"], fontsize=10)
+    ax.axvline(0, color=T["texte_dim"], lw=1.0, zorder=5)
     ax.spines["left"].set_visible(False)
-    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.spines["bottom"].set_color(T["grille"])
     ax.xaxis.set_visible(False)
 
     _header(fig, ax, titre, sous_titre, note)
@@ -475,7 +465,7 @@ def divergent(categories, valeurs,
 
 def bullet_chart(kpis: list,
                  titre="", sous_titre="", note="",
-                 accent=ACCENT_DEFAUT, figsize=None, format=None):
+                 accent=ACCENT_DEFAUT, figsize=None, format=None, background=None):
     """
     Bullet charts (Stephen Few) — représentation compacte et honnête
     d'un KPI face à son objectif et à ses plages de performance.
@@ -503,15 +493,16 @@ def bullet_chart(kpis: list,
     n = len(kpis)
     import beau_graphique as _bg
     figsize = _bg._resoudre_figsize(figsize, format)
+    T = _t()
     fig, axes = plt.subplots(n, 1, figsize=figsize or (10, n * 1.4 + 0.8))
-    fig.patch.set_facecolor(BG)
+    _bg._appliquer_background(fig, None, background)
     if n == 1:
         axes = [axes]
 
-    plage_colors = ["#E8E9F0", "#D0D2E0", "#B8BBD0"]  # Mauvais → Bon (gris)
+    plage_colors = [T["grille"], T["serie_dim"], "#C8CADB"]
 
     for ax, kpi in zip(axes, kpis):
-        ax.set_facecolor(BG)
+        ax.set_facecolor(T["bg"])
         for sp in ax.spines.values():
             sp.set_visible(False)
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
@@ -522,45 +513,38 @@ def bullet_chart(kpis: list,
         fmt    = kpi.get("fmt", "{:.1f}")
         xmax   = plages[-1] * 1.05
 
-        # Fond de plages (gris croissant = mauvais → bon)
         limites = [0] + plages
         for j in range(len(limites) - 1):
             ax.barh(0, limites[j+1] - limites[j], left=limites[j],
                     height=0.7, color=plage_colors[j % len(plage_colors)])
 
-        # Barre de valeur (accent, fine au centre)
         ax.barh(0, val, height=0.36, color=accent, alpha=0.92, zorder=3)
+        ax.plot([obj, obj], [-0.28, 0.28], color=T["texte"], lw=3.5, zorder=4)
 
-        # Marqueur objectif (trait vertical épais)
-        ax.plot([obj, obj], [-0.28, 0.28], color=TEXTE, lw=3.5, zorder=4)
-
-        # Label nom à gauche
         ax.text(-xmax * 0.02, 0, kpi["nom"],
                 ha="right", va="center", fontsize=10,
-                fontweight="bold", color=TEXTE,
+                fontweight="bold", color=T["texte"],
                 transform=ax.get_yaxis_transform())
 
-        # Valeur courante
         ax.text(val, 0.42, fmt.format(val),
                 ha="center", va="bottom", fontsize=9.5,
                 fontweight="bold", color=accent)
 
-        # Objectif
         ax.text(obj, -0.44, f"Obj: {fmt.format(obj)}",
-                ha="center", va="top", fontsize=8.5, color=GRIS_FORT)
+                ha="center", va="top", fontsize=8.5, color=T["texte_dim"])
 
         ax.set_xlim(0, xmax)
         ax.set_ylim(-0.6, 0.7)
 
     if titre:
         axes[0].set_title(titre, fontsize=13, fontweight="bold",
-                          color=TEXTE, pad=14, loc="left")
+                          color=T["texte"], pad=14, loc="left")
     if sous_titre:
         axes[0].annotate(sous_titre, xy=(0, 1), xycoords="axes fraction",
                          xytext=(0, 28), textcoords="offset points",
-                         fontsize=9.5, color=GRIS_FORT, annotation_clip=False)
+                         fontsize=9.5, color=T["texte_dim"], annotation_clip=False)
     if note:
-        fig.text(0.01, 0.01, note, fontsize=8, color=GRIS_MOY,
+        fig.text(0.01, 0.01, note, fontsize=8, color=T["serie_dim"],
                  style="italic", transform=fig.transFigure)
 
     fig.tight_layout(h_pad=0.4)
@@ -583,6 +567,7 @@ def annoter_zone(ax, x_debut, x_fin, label="",
     >>> annoter_zone(ax, x_debut="Mar", x_fin="Mai", label="Période COVID",
     ...              couleur=ACCENTS["rouge"])
     """
+    T = _t()
     ax.axvspan(x_debut, x_fin, alpha=alpha, color=couleur, zorder=1)
     ymin, ymax = ax.get_ylim()
     y = ymin + (ymax - ymin) * y_label
@@ -590,7 +575,7 @@ def annoter_zone(ax, x_debut, x_fin, label="",
     if label:
         ax.text(x_mid, y, label, ha="center", va="top",
                 fontsize=9, color=couleur, fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.3", fc=BG, ec=couleur, alpha=0.85))
+                bbox=dict(boxstyle="round,pad=0.3", fc=T["bg"], ec=couleur, alpha=0.85))
 
 
 def annoter_seuil(ax, y, label="", couleur=ACCENTS["rouge"],
@@ -602,6 +587,7 @@ def annoter_seuil(ax, y, label="", couleur=ACCENTS["rouge"],
     -------
     >>> annoter_seuil(ax, y=100, label="Objectif 100k", couleur=ACCENTS["vert"])
     """
+    T = _t()
     ax.axhline(y, color=couleur, lw=1.6, linestyle=style, alpha=0.85, zorder=3)
     xmin, xmax = ax.get_xlim()
     x_pos = xmax if cote == "droite" else xmin
@@ -609,7 +595,7 @@ def annoter_seuil(ax, y, label="", couleur=ACCENTS["rouge"],
     if label:
         ax.text(x_pos, y, f"  {label}  ", ha=ha, va="bottom",
                 fontsize=9, color=couleur, fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", fc=BG, ec=couleur, alpha=0.9))
+                bbox=dict(boxstyle="round,pad=0.25", fc=T["bg"], ec=couleur, alpha=0.9))
 
 
 def annoter_delta(ax, x, y_debut, y_fin, label="",
@@ -622,6 +608,7 @@ def annoter_delta(ax, x, y_debut, y_fin, label="",
     -------
     >>> annoter_delta(ax, x=5, y_debut=42, y_fin=71, label="×1.7", couleur=ACCENTS["vert"])
     """
+    T = _t()
     delta  = y_fin - y_debut
     if couleur is None:
         couleur = ACCENTS["vert"] if delta >= 0 else ACCENTS["rouge"]
@@ -632,7 +619,7 @@ def annoter_delta(ax, x, y_debut, y_fin, label="",
     txt = label if label else fmt.format(delta)
     ax.text(x, mid, f" {txt}", va="center", ha="left",
             fontsize=9.5, color=couleur, fontweight="bold",
-            bbox=dict(boxstyle="round,pad=0.3", fc=BG, ec=couleur, alpha=0.85))
+            bbox=dict(boxstyle="round,pad=0.3", fc=T["bg"], ec=couleur, alpha=0.85))
 
 
 def annoter_point(ax, x, y, label, couleur=ACCENT_DEFAUT,
@@ -648,6 +635,7 @@ def annoter_point(ax, x, y, label, couleur=ACCENT_DEFAUT,
     -------
     >>> annoter_point(ax, x=8, y=95, label="Pic historique", couleur=ACCENTS["rouge"])
     """
+    T = _t()
     dirs = {
         "haut"   : (0,  offset),
         "bas"    : (0, -offset),
@@ -662,11 +650,10 @@ def annoter_point(ax, x, y, label, couleur=ACCENT_DEFAUT,
         ha="center", va="bottom" if dy > 0 else "top",
         arrowprops=dict(arrowstyle="-|>", color=couleur,
                         lw=1.5, connectionstyle="arc3,rad=0.15"),
-        bbox=dict(boxstyle="round,pad=0.35", fc=BG, ec=couleur,
+        bbox=dict(boxstyle="round,pad=0.35", fc=T["bg"], ec=couleur,
                   alpha=0.92, linewidth=1.4)
     )
-    # Point accentué
-    ax.scatter([x], [y], color=couleur, s=55, zorder=5, edgecolors=BG, linewidths=1.5)
+    ax.scatter([x], [y], color=couleur, s=55, zorder=5, edgecolors=T["bg"], linewidths=1.5)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -677,7 +664,8 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
                       couleurs: list = None, groupes: dict = None,
                       afficher_delta=True, fmt_delta="{:+.0f}", fmt_valeur="{:.0f}",
                       accent_pos=None, accent_neg=None,
-                      titre="", sous_titre="", note="", figsize=None, format=None):
+                      titre="", sous_titre="", note="", figsize=None, format=None,
+                      background=None):
     """
     Pour chaque entité, affiche N barres chronologiques (une par période)
     reliées par une ligne suivant le sommet des barres. Les variations entre
@@ -701,12 +689,13 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
     ...     titre="Investissements par tendance, 2022–2024 (Mds$)",
     ... )
     """
+    import beau_graphique as bg
     if couleurs is None:
-        import beau_graphique as bg
         couleurs = bg._palette_pour(categories)
     accent_pos = accent_pos or ACCENTS["vert"]
     accent_neg = accent_neg or ACCENTS["rouge"]
 
+    T = _t()
     n_cat = len(categories)
     n_per = len(periodes)
     largeur = 0.55
@@ -717,9 +706,8 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
     positions = {(i, j): i * pas_groupe + j * pas_barre
                  for i in range(n_cat) for j in range(n_per)}
     ymax_global = max(max(row) for row in valeurs)
-    import beau_graphique as _bg
-    figsize = _bg._resoudre_figsize(figsize, format)
-    fig, ax = _init_ax(figsize or (max(10, n_cat * n_per * 0.9), 6))
+    figsize = bg._resoudre_figsize(figsize, format)
+    fig, ax = _init_ax(figsize or (max(10, n_cat * n_per * 0.9), 6), background)
 
     for i, cat in enumerate(categories):
         couleur = couleurs[i % len(couleurs)]
@@ -729,7 +717,7 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
         for x, val in zip(xs, sommets):
             ax.bar(x, val, width=largeur, color=couleur, alpha=0.88, zorder=3)
             ax.text(x, val + ymax_global * 0.02, fmt_valeur.format(val),
-                    ha="center", va="bottom", fontsize=8.5, color=TEXTE)
+                    ha="center", va="bottom", fontsize=8.5, color=T["texte"])
 
         ax.plot(xs, sommets, color=couleur, lw=1.2, alpha=0.7, zorder=2)
 
@@ -746,18 +734,18 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
 
         centre = sum(xs) / len(xs)
         ax.text(centre, -ymax_global * 0.08, cat, ha="center", va="top",
-                fontsize=9.5, color=TEXTE_DOUX, fontweight="bold")
+                fontsize=9.5, color=T["texte_dim"], fontweight="bold")
 
     all_x = [positions[(i, j)] for i in range(n_cat) for j in range(n_per)]
     all_labels = [periodes[j] for i in range(n_cat) for j in range(n_per)]
     ax.set_xticks(all_x)
-    ax.set_xticklabels(all_labels, fontsize=8, color=GRIS_FORT)
+    ax.set_xticklabels(all_labels, fontsize=8, color=T["texte_dim"])
 
     ax.set_xlim(-0.6, max(positions.values()) + largeur + 0.6)
     ax.set_ylim(-ymax_global * 0.22, ymax_global * 1.25)
     ax.yaxis.set_visible(False)
     ax.spines["left"].set_visible(False)
-    ax.spines["bottom"].set_color(GRIS_CLAIR)
+    ax.spines["bottom"].set_color(T["grille"])
     ax.grid(visible=False)
 
     if groupes:
