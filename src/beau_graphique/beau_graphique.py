@@ -351,11 +351,27 @@ def _resoudre_figsize(figsize, format=None):
     return None
 
 
-def _new_fig(figsize=None, ax=None, format=None):
+def _appliquer_background(fig, ax, background=None):
+    """Applique le fond à figure et axe.
+    None → _T["bg"] ; "transparent" → alpha=0 ; hex → couleur."""
+    if background == "transparent":
+        fig.patch.set_alpha(0)
+        if ax is not None:
+            ax.patch.set_alpha(0)
+    else:
+        bg = background if background is not None else _T["bg"]
+        fig.patch.set_facecolor(bg)
+        if ax is not None:
+            ax.set_facecolor(bg)
+
+
+def _new_fig(figsize=None, ax=None, format=None, background=None):
     """Crée une nouvelle figure, ou réutilise l'axe fourni si présent."""
     if ax is not None:
         return ax.figure, ax
-    return plt.subplots(figsize=_resoudre_figsize(figsize, format) or (10, 5.6))
+    fig, new_ax = plt.subplots(figsize=_resoudre_figsize(figsize, format) or (10, 5.6))
+    _appliquer_background(fig, new_ax, background)
+    return fig, new_ax
 
 
 def _es_date(valeurs) -> bool:
@@ -392,7 +408,8 @@ def _formater_axe_dates(ax, valeurs, freq=None):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
-          note="", markers=True, fill_last=False, figsize=None, ax=None, format=None, **_extra):
+          note="", markers=True, fill_last=False, figsize=None, ax=None, format=None,
+          background=None, **_extra):
     """
     Graphique en lignes multi-séries.
 
@@ -420,7 +437,7 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleurs_series = _palette_pour(list(y_series.keys()))
     for i, (nom, vals) in enumerate(y_series.items()):
         color = couleurs_series[i]
@@ -452,7 +469,7 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
            note="", couleur=None, horizontal=False, valeurs_sur_barres=True,
            couleurs_multiples=False, fn_couleur=None, figsize=None, ax=None,
-           format=None, **_extra):
+           format=None, background=None, **_extra):
     """
     Graphique en barres simples (verticales ou horizontales).
 
@@ -478,7 +495,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
 
     if fn_couleur is not None:
         colors = [fn_couleur(cat, val) for cat, val in zip(categories, valeurs)]
@@ -517,7 +534,8 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
-                    xlabel="", ylabel="", note="", figsize=None, ax=None, format=None, **_extra):
+                    xlabel="", ylabel="", note="", figsize=None, ax=None, format=None,
+                    background=None, **_extra):
     """
     Barres groupées multi-séries.
 
@@ -539,7 +557,7 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     n_groupes = len(groupes)
     x = np.arange(len(categories))
     width = 0.7 / n_groupes
@@ -569,7 +587,7 @@ def barres_groupees(categories, groupes: dict, titre="", sous_titre="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
-         note="", empile=False, figsize=None, ax=None, format=None):
+         note="", empile=False, figsize=None, ax=None, format=None, background=None):
     """
     Graphique en aire (simple ou empilée).
 
@@ -588,7 +606,7 @@ def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     noms = list(y_series.keys())
     valeurs = list(y_series.values())
 
@@ -614,7 +632,8 @@ def aire(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 # ══════════════════════════════════════════════════════════════════════════════
 
 def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréquence",
-                note="", courbe_densite=False, couleur=None, figsize=None, ax=None, format=None):
+                note="", courbe_densite=False, couleur=None, figsize=None, ax=None,
+                format=None, background=None):
     """
     Histogramme avec optionnellement une courbe de densité KDE.
 
@@ -630,7 +649,7 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     color = couleur or PALETTE[0]
 
     ax.hist(data, bins=bins, color=color, alpha=0.75, edgecolor=_T["fond_neutre"], linewidth=0.5)
@@ -665,7 +684,7 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
 
 def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
           titre="", sous_titre="", xlabel="", ylabel="", note="",
-          ligne_tendance=False, figsize=None, ax=None, format=None):
+          ligne_tendance=False, figsize=None, ax=None, format=None, background=None):
     """
     Nuage de points avec encodage optionnel couleur/taille.
 
@@ -685,7 +704,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
 
     scatter_kw = dict(alpha=0.75, edgecolors=_T["fond_neutre"], linewidths=0.6)
 
@@ -734,7 +753,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def camembert(labels, valeurs, titre="", sous_titre="", note="",
-              donut=True, exploser_max=True, figsize=None, ax=None, format=None):
+              donut=True, exploser_max=True, figsize=None, ax=None, format=None, background=None):
     """
     Graphique circulaire (camembert ou donut).
 
@@ -754,7 +773,7 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
     """
     ajuster_layout = ax is None
     figsize = _resoudre_figsize(figsize, format)
-    fig, ax = _new_fig(figsize or (7, 7), ax=ax)
+    fig, ax = _new_fig(figsize or (7, 7), ax=ax, background=background)
 
     explode = [0] * len(valeurs)
     if exploser_max:
@@ -809,7 +828,8 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
 
 def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
             titre="", sous_titre="", note="",
-            cmap="RdYlGn", annot=True, fmt=".2f", figsize=None, ax=None, format=None):
+            cmap="RdYlGn", annot=True, fmt=".2f", figsize=None, ax=None, format=None,
+            background=None):
     """
     Heatmap générique (corrélation, pivot, confusion matrix…).
 
@@ -831,7 +851,7 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
     n, m = matrice.shape
     ajuster_layout = ax is None
     figsize = _resoudre_figsize(figsize, format)
-    fig, ax = _new_fig(figsize or (max(6, m * 0.9), max(5, n * 0.75)), ax=ax)
+    fig, ax = _new_fig(figsize or (max(6, m * 0.9), max(5, n * 0.75)), ax=ax, background=background)
 
     im = ax.imshow(matrice, cmap=cmap, aspect="auto",
                    vmin=matrice.min(), vmax=matrice.max())
@@ -1375,7 +1395,8 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
 
 def box_plot(data: list, categories: list = None, titre="", sous_titre="",
              xlabel="", ylabel="", note="", horizontal=False, couleur=None,
-             afficher_points=False, notch=False, figsize=None, ax=None, format=None):
+             afficher_points=False, notch=False, figsize=None, ax=None, format=None,
+             background=None):
     """
     Boîtes à moustaches : compare la distribution complète (médiane, quartiles,
     valeurs extrêmes) de plusieurs groupes — plus honnête qu'une moyenne seule.
@@ -1407,7 +1428,7 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur = couleur or PALETTE[0]
     n = len(data)
     categories = categories or [f"Groupe {i + 1}" for i in range(n)]
@@ -1455,7 +1476,7 @@ def box_plot(data: list, categories: list = None, titre="", sous_titre="",
 
 def violin(data: list, categories: list = None, titre="", sous_titre="",
            xlabel="", ylabel="", note="", afficher_boxplot=True, couleur=None,
-           figsize=None, ax=None, format=None):
+           figsize=None, ax=None, format=None, background=None):
     """
     Violons : montre la forme complète de la distribution (densité) par groupe —
     révèle bimodalité, asymétrie, ce qu'une boîte à moustaches seule ne montre pas.
@@ -1486,7 +1507,7 @@ def violin(data: list, categories: list = None, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     n = len(data)
     categories = categories or [f"Groupe {i + 1}" for i in range(n)]
     positions = list(range(1, n + 1))
@@ -1526,7 +1547,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
               total_fin: float = None, label_debut="Début", label_fin="Total",
               titre="", sous_titre="", ylabel="", note="", couleur_pos=None,
               couleur_neg=None, couleur_total=None, connecteurs=True,
-              figsize=None, ax=None, format=None):
+              figsize=None, ax=None, format=None, background=None):
     """
     Graphique en cascade : montre comment des contributions positives et
     négatives successives transforment une valeur de départ en valeur finale.
@@ -1560,7 +1581,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur_pos = couleur_pos or PALETTE[6]
     couleur_neg = couleur_neg or PALETTE[1]
     couleur_total = couleur_total or "#6B6F85"
@@ -1633,7 +1654,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
 def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
              xlabel="", note="", couleur=None, fn_couleur=None, trier=True,
              ligne_ref: float = None, label_ref="", taille_point=8,
-             figsize=None, ax=None, format=None):
+             figsize=None, ax=None, format=None, background=None):
     """
     Tige + point : classement de catégories, plus léger visuellement qu'une
     barre pleine quand on a beaucoup de catégories ou peu de place.
@@ -1664,7 +1685,7 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur = couleur or PALETTE[0]
 
     paires = list(zip(categories, valeurs))
@@ -1711,7 +1732,8 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
 def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
           label_gauche="Avant", label_droite="Après", titre="", sous_titre="",
           note="", couleur_hausse=None, couleur_baisse=None, couleur_stable=None,
-          afficher_valeurs=True, focus: list = None, figsize=None, ax=None, format=None):
+          afficher_valeurs=True, focus: list = None, figsize=None, ax=None, format=None,
+          background=None):
     """
     Deux colonnes de points reliés par des segments : montre, catégorie par
     catégorie, qui a progressé, régressé ou stagné entre deux périodes.
@@ -1743,7 +1765,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
     ... )
     """
     ajuster_layout = ax is None
-    fig, ax = _new_fig(figsize, ax=ax, format=format)
+    fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur_hausse = couleur_hausse or PALETTE[6]
     couleur_baisse = couleur_baisse or PALETTE[1]
     couleur_stable = couleur_stable or "#A8ABBC"
@@ -2234,7 +2256,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
 def bump(periodes, series: dict, titre="", sous_titre="", note="",
          figsize=None, format=None, ax=None,
          couleur=None, couleurs_multiples=None,
-         montrer_valeurs=True):
+         montrer_valeurs=True, background=None):
     """
     Graphique de classement (bump chart) — évolution des positions dans le temps.
 
@@ -2275,9 +2297,7 @@ def bump(periodes, series: dict, titre="", sous_titre="", note="",
     if isinstance(couleurs, str):
         couleurs = [couleurs] * len(noms)
 
-    fig, ax = _new_fig(figsize, ax, format)
-    fig.patch.set_facecolor(_T["bg"])
-    ax.set_facecolor(_T["bg"])
+    fig, ax = _new_fig(figsize, ax, format, background=background)
 
     x        = np.arange(len(periodes), dtype=float)
     max_rang = max(max(rangs) for rangs in series.values())
@@ -2343,7 +2363,7 @@ def radar(categories, series: dict, titre="", sous_titre="", note="",
           figsize=None, format=None,
           vmin=0, vmax=None,
           couleur=None, couleurs_multiples=None,
-          remplir=True, alpha_remplissage=0.15):
+          remplir=True, alpha_remplissage=0.15, background=None):
     """
     Graphique radar (spider / toile d'araignée) — profil multi-dimensionnel.
 
@@ -2390,9 +2410,8 @@ def radar(categories, series: dict, titre="", sous_titre="", note="",
 
     fig_size = _resoudre_figsize(figsize, format) or (7, 7)
     fig      = plt.figure(figsize=fig_size)
-    fig.patch.set_facecolor(_T["bg"])
     ax = fig.add_subplot(111, projection="polar")
-    ax.set_facecolor(_T["bg"])
+    _appliquer_background(fig, ax, background)
 
     all_vals = [v for vals in series.values() for v in vals]
     if vmax is None:
@@ -2434,7 +2453,7 @@ def radar(categories, series: dict, titre="", sous_titre="", note="",
 def ridgeline(series: dict, titre="", sous_titre="", note="",
               figsize=None, format=None,
               couleur=None, couleurs_multiples=None,
-              alpha=0.75, chevauchement=0.7):
+              alpha=0.75, chevauchement=0.7, background=None):
     """
     Graphique ridgeline (Joy Plot) — distributions superposées décalées.
 
@@ -2485,8 +2504,7 @@ def ridgeline(series: dict, titre="", sous_titre="", note="",
 
     fig_size = _resoudre_figsize(figsize, format) or (10, max(4, n * 1.4))
     fig, ax  = plt.subplots(figsize=fig_size)
-    fig.patch.set_facecolor(_T["bg"])
-    ax.set_facecolor(_T["bg"])
+    _appliquer_background(fig, ax, background)
 
     all_vals = np.concatenate([np.asarray(v, dtype=float) for v in series.values()])
     xmin, xmax = all_vals.min(), all_vals.max()
