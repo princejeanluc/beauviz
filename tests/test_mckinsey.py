@@ -55,6 +55,94 @@ def test_dot_plot_comparatif_compatible_themes():
     reinitialiser()
 
 
+def test_dot_plot_comparatif_background_transparent():
+    """background="transparent" → alpha=0 sur figure et axes."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.1, 0.3), "B": (0.2, 0.5)},
+        background="transparent",
+    )
+    assert fig.patch.get_alpha() == 0
+    assert ax.patch.get_alpha() == 0
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_background_hex():
+    """background hex → facecolor de la figure."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.1, 0.3)},
+        background="#0D1B2A",
+    )
+    assert fig.get_facecolor() != (1, 1, 1, 1)  # pas blanc
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_label_plage_format():
+    """label_plage supporte les tokens {vmin} et {vmax}."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.0, 0.5), "B": (0.1, 0.3)},
+        label_plage="Score ({vmin}–{vmax})",
+        vmin=0, vmax=1,
+    )
+    # Le texte rendu doit apparaître dans les artists textuels de l'axe
+    texts = [t.get_text() for t in ax.texts]
+    assert any("Score (0–1)" in t for t in texts)
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_montrer_plage():
+    """montrer_plage=True ajoute un patch Rectangle dans l'axe."""
+    from matplotlib.patches import Rectangle
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.05, 0.25), "B": (0.1, 0.3)},
+        montrer_plage=True, vmin=0, vmax=1,
+    )
+    rects = [p for p in ax.patches if isinstance(p, Rectangle)]
+    assert len(rects) >= 1
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_couleurs_decouplees():
+    """couleur_avant et couleur_apres sont indépendants."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.1, 0.4)},
+        couleur_avant="#FF0000",
+        couleur_apres="#0000FF",
+    )
+    assert ax is not None
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_sans_fleche():
+    """montrer_fleche=False ne doit pas lever d'erreur."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.1, 0.4), "B": (0.2, 0.3)},
+        montrer_fleche=False,
+    )
+    assert ax is not None
+    plt.close("all")
+
+
+def test_dot_plot_comparatif_vmin_vmax_explicites():
+    """vmin/vmax explicites bornent l'axe Y."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.2, 0.6)},
+        vmin=0, vmax=1,
+    )
+    ylo, _ = ax.get_ylim()
+    assert ylo == 0.0
+    plt.close("all")
+
+
+def test_dot_plot_compatibilite_couleur_legacy():
+    """L'ancien paramètre couleur= fonctionne encore (rétrocompatibilité)."""
+    fig, ax = dot_plot_comparatif(
+        {"A": (0.1, 0.3)},
+        couleur="#4361EE",
+    )
+    assert ax is not None
+    plt.close("all")
+
+
 # ── bulle_4d ──────────────────────────────────────────────────────────────────
 
 def test_bulle_4d_retourne_fig_ax():
