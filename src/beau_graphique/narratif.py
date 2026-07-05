@@ -499,10 +499,11 @@ def bullet_chart(kpis: list,
     if n == 1:
         axes = [axes]
 
-    plage_colors = [T["grille"], T["serie_dim"], "#C8CADB"]
+    plage_colors = [T["grille"], T["serie_dim"], T["fond_neutre"]]
+    label_zone = 0.32   # fraction de xmax réservée à gauche pour le nom du KPI
 
     for ax, kpi in zip(axes, kpis):
-        ax.set_facecolor(T["bg"])
+        _bg._appliquer_background(fig, ax, background)
         for sp in ax.spines.values():
             sp.set_visible(False)
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
@@ -512,6 +513,7 @@ def bullet_chart(kpis: list,
         obj    = kpi["objectif"]
         fmt    = kpi.get("fmt", "{:.1f}")
         xmax   = plages[-1] * 1.05
+        x_orig = -xmax * label_zone          # origine gauche : zone label
 
         limites = [0] + plages
         for j in range(len(limites) - 1):
@@ -521,10 +523,10 @@ def bullet_chart(kpis: list,
         ax.barh(0, val, height=0.36, color=accent, alpha=0.92, zorder=3)
         ax.plot([obj, obj], [-0.28, 0.28], color=T["texte"], lw=3.5, zorder=4)
 
+        # Nom du KPI en coordonnées données — plus de transform, tight_layout comprend
         ax.text(-xmax * 0.02, 0, kpi["nom"],
                 ha="right", va="center", fontsize=10,
-                fontweight="bold", color=T["texte"],
-                transform=ax.get_yaxis_transform())
+                fontweight="bold", color=T["texte"])
 
         ax.text(val, 0.42, fmt.format(val),
                 ha="center", va="bottom", fontsize=9.5,
@@ -533,7 +535,7 @@ def bullet_chart(kpis: list,
         ax.text(obj, -0.44, f"Obj: {fmt.format(obj)}",
                 ha="center", va="top", fontsize=8.5, color=T["texte_dim"])
 
-        ax.set_xlim(0, xmax)
+        ax.set_xlim(x_orig, xmax * 1.05)    # zone négative pour le label
         ax.set_ylim(-0.6, 0.7)
 
     if titre:

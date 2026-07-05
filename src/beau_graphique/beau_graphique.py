@@ -700,16 +700,16 @@ def histogramme(data, bins=20, titre="", sous_titre="", xlabel="", ylabel="Fréq
         bin_width = bin_edges[1] - bin_edges[0]
         scale = len(data) * bin_width
         ax2 = ax.twinx()
-        ax2.plot(kde_x, kde_y, color=PALETTE[1], linewidth=2.4, label="Densité")
+        ax2.plot(kde_x, kde_y, color=PALETTE[1 % len(PALETTE)], linewidth=2.4, label="Densité")
         ax2.set_yticks([])
         ax2.spines["right"].set_visible(False)
         ax2.spines["top"].set_visible(False)
 
     # Ligne médiane
     mediane = np.median(data)
-    ax.axvline(mediane, color=PALETTE[3], linewidth=1.8, linestyle="--", alpha=0.8)
+    ax.axvline(mediane, color=PALETTE[3 % len(PALETTE)], linewidth=1.8, linestyle="--", alpha=0.8)
     ax.text(mediane, ax.get_ylim()[1] * 0.97, f" Médiane\n {mediane:.1f}",
-            color=PALETTE[3], fontsize=9, va="top")
+            color=PALETTE[3 % len(PALETTE)], fontsize=9, va="top")
 
     return _finalize(ax, titre, sous_titre, xlabel, ylabel, note, legende=False, fig=fig,
                      ajuster_layout=ajuster_layout)
@@ -776,7 +776,7 @@ def nuage(x, y, couleur_var=None, taille_var=None, labels=None,
         xfit_num = np.linspace(x_num.min(), x_num.max(), 200)
         xfit = mdates.num2date(xfit_num) if es_date_x else xfit_num
         label_tendance = "Tendance" if es_date_x else f"Tendance (y={m:.2f}x+{b:.2f})"
-        ax.plot(xfit, m * xfit_num + b, color=PALETTE[1], linewidth=1.8,
+        ax.plot(xfit, m * xfit_num + b, color=PALETTE[1 % len(PALETTE)], linewidth=1.8,
                 linestyle="--", alpha=0.8, label=label_tendance)
 
     _formater_axe_dates(ax, x)
@@ -1563,7 +1563,7 @@ def violin(data: list, categories: list = None, titre="", sous_titre="",
 
     if afficher_boxplot:
         bp = ax.boxplot(data, positions=positions, widths=0.08, patch_artist=True,
-                        showfliers=False, medianprops=dict(color=PALETTE[1], linewidth=2))
+                        showfliers=False, medianprops=dict(color=PALETTE[1 % len(PALETTE)], linewidth=2))
         for box in bp["boxes"]:
             box.set_facecolor(_T["fond_neutre"])
             box.set_edgecolor(_T["texte_dim"])
@@ -1622,8 +1622,8 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
     """
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
-    couleur_pos = couleur_pos or PALETTE[6]
-    couleur_neg = couleur_neg or PALETTE[1]
+    couleur_pos = couleur_pos or _COULEUR_HAUT
+    couleur_neg = couleur_neg or _COULEUR_BAS
     couleur_total = couleur_total or _T["texte_dim"]
 
     labels, hauteurs, bottoms, couleurs_barres, est_total, vals_affiche = [], [], [], [], [], []
@@ -1808,8 +1808,8 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
     """
     ajuster_layout = ax is None
     fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
-    couleur_hausse = couleur_hausse or PALETTE[6]
-    couleur_baisse = couleur_baisse or PALETTE[1]
+    couleur_hausse = couleur_hausse or _COULEUR_HAUT
+    couleur_baisse = couleur_baisse or _COULEUR_BAS
     couleur_stable = couleur_stable or _T["serie_dim"]
     n = len(categories)
 
