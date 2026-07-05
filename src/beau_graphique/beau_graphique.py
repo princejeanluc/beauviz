@@ -1222,7 +1222,7 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
              niveaux_couleur: list = None, quadrants=False,
              quadrant_x=0.5, quadrant_y=0.5, taille_min=80, taille_max=2000,
              palette_bulles: list = None, titre="", sous_titre="", note="",
-             figsize=None, format=None):
+             figsize=None, format=None, background=None):
     """
     Nuage de points où chaque bulle encode 4 variables : position X, position Y,
     taille (variable continue) et couleur (variable ordinale 1→N). Permet de
@@ -1253,15 +1253,16 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
     niveaux_couleur = niveaux_couleur or sorted(set(couleur_var))
     ncol = len(niveaux_couleur)
     if palette_bulles is None:
-        cmap = plt.colormaps["Blues"]
-        palette_bulles = [cmap(0.3 + 0.6 * i / max(ncol - 1, 1)) for i in range(ncol)]
+        # Interpole la PALETTE active pour couvrir tous les niveaux
+        src = PALETTE * ((ncol // len(PALETTE)) + 1)
+        palette_bulles = src[:ncol]
     couleur_par_niveau = dict(zip(niveaux_couleur, palette_bulles))
-    point_colors = [couleur_par_niveau.get(v, "#A8ABBC") for v in couleur_var]
+    point_colors = [couleur_par_niveau.get(v, _T["serie_dim"]) for v in couleur_var]
 
     trange = (taille.max() - taille.min()) or 1.0
     tailles_norm = taille_min + (taille - taille.min()) / trange * (taille_max - taille_min)
 
-    fig, ax = plt.subplots(figsize=figsize or (9, 7))
+    fig, ax = _new_fig(figsize or (9, 7), background=background)
 
     if quadrants:
         ax.axhline(quadrant_y, color=_T["grille"], lw=1, ls="--", zorder=1)
