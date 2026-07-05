@@ -408,8 +408,8 @@ def _formater_axe_dates(ax, valeurs, freq=None):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
-          note="", markers=True, fill_last=False, figsize=None, ax=None, format=None,
-          background=None, **_extra):
+          note="", markers=True, fill_last=False, vmin=None, vmax=None,
+          figsize=None, ax=None, format=None, background=None, **_extra):
     """
     Graphique en lignes multi-séries.
 
@@ -456,6 +456,8 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
                     xytext=(6, 0), textcoords="offset points",
                     fontsize=9.5, color=color, fontweight="bold", va="center")
 
+    if vmin is not None or vmax is not None:
+        ax.set_ylim(vmin, vmax)
     _formater_axe_dates(ax, x)
 
     return _finalize(ax, titre, sous_titre, xlabel, ylabel, note, fig=fig,
@@ -468,8 +470,8 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
 
 def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
            note="", couleur=None, horizontal=False, valeurs_sur_barres=True,
-           couleurs_multiples=False, fn_couleur=None, figsize=None, ax=None,
-           format=None, background=None, **_extra):
+           couleurs_multiples=False, fn_couleur=None, vmin=None, vmax=None,
+           figsize=None, ax=None, format=None, background=None, **_extra):
     """
     Graphique en barres simples (verticales ou horizontales).
 
@@ -510,7 +512,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
                 ax.text(bar.get_width() + max(valeurs) * 0.01, bar.get_y() + bar.get_height() / 2,
                         f"{val:,.0f}", va="center", ha="left", fontsize=9.5, fontweight="bold",
                         color=_T["texte"])
-        ax.set_xlim(0, max(valeurs) * 1.15)
+        ax.set_xlim(vmin if vmin is not None else 0, vmax if vmax is not None else max(valeurs) * 1.15)
         ax.xaxis.set_visible(False)
         ax.spines["bottom"].set_visible(False)
     else:
@@ -520,7 +522,7 @@ def barres(categories, valeurs, titre="", sous_titre="", xlabel="", ylabel="",
                 ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(valeurs) * 0.01,
                         f"{val:,.0f}", ha="center", va="bottom", fontsize=9.5,
                         fontweight="bold", color=_T["texte"])
-        ax.set_ylim(0, max(valeurs) * 1.15)
+        ax.set_ylim(vmin if vmin is not None else 0, vmax if vmax is not None else max(valeurs) * 1.15)
         ax.yaxis.set_visible(False)
         ax.spines["left"].set_visible(False)
         _formater_axe_dates(ax, categories)
@@ -1654,7 +1656,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
 def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
              xlabel="", note="", couleur=None, fn_couleur=None, trier=True,
              ligne_ref: float = None, label_ref="", taille_point=8,
-             figsize=None, ax=None, format=None, background=None):
+             vmin=None, vmax=None, figsize=None, ax=None, format=None, background=None):
     """
     Tige + point : classement de catégories, plus léger visuellement qu'une
     barre pleine quand on a beaucoup de catégories ou peu de place.
@@ -1712,6 +1714,8 @@ def lollipop(categories: list, valeurs: list, titre="", sous_titre="",
             ax.text(ligne_ref, -0.6, label_ref, fontsize=9, color=_T["texte_dim"],
                     ha="center", va="top")
 
+    if vmin is not None or vmax is not None:
+        ax.set_xlim(vmin, vmax)
     ax.set_yticks(y_pos)
     ax.set_yticklabels(categories_t)
     ax.invert_yaxis()
