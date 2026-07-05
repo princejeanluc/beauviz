@@ -908,7 +908,7 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
         for i in range(n):
             for j in range(m):
                 val = matrice[i, j]
-                color = "white" if val < thresh else "#1A1C2E"
+                color = _T["bg"] if val < thresh else _T["texte"]
                 ax.text(j, i, _fmt_builtin(val, fmt), ha="center", va="center",
                         fontsize=9, color=color, fontweight="bold")
 
@@ -1336,7 +1336,8 @@ def bulle_4d(x: list, y: list, taille: list, couleur_var: list, labels: list = N
 def unit_chart(categories: list, valeurs: list, mode="proportion",
                 reference: list = None, valeur_max: float = None, couleur=None,
                 fmt="{:.0f}", fmt_ratio="{:.1f}×", taille_carre=1.0,
-                titre="", sous_titre="", note="", figsize=None, format=None):
+                titre="", sous_titre="", note="", figsize=None, format=None,
+                background=None):
     """
     Chaque item est un carré de référence rempli proportionnellement à sa valeur.
     Mode "proportion" : un seul rectangle rempli jusqu'au %. Mode "ratio" : deux
@@ -1366,6 +1367,7 @@ def unit_chart(categories: list, valeurs: list, mode="proportion",
     figsize = _resoudre_figsize(figsize, format)
     n = len(categories)
     fig, ax = plt.subplots(figsize=figsize or (n * 1.7, 4.5))
+    _appliquer_background(fig, ax, background)
 
     espacement = taille_carre * 1.7
     positions = [i * espacement for i in range(n)]
@@ -1622,7 +1624,7 @@ def waterfall(categories: list, valeurs: list, total_debut: float = None,
     fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur_pos = couleur_pos or PALETTE[6]
     couleur_neg = couleur_neg or PALETTE[1]
-    couleur_total = couleur_total or "#6B6F85"
+    couleur_total = couleur_total or _T["texte_dim"]
 
     labels, hauteurs, bottoms, couleurs_barres, est_total, vals_affiche = [], [], [], [], [], []
     cumul = 0.0
@@ -1808,7 +1810,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
     fig, ax = _new_fig(figsize, ax=ax, format=format, background=background)
     couleur_hausse = couleur_hausse or PALETTE[6]
     couleur_baisse = couleur_baisse or PALETTE[1]
-    couleur_stable = couleur_stable or "#A8ABBC"
+    couleur_stable = couleur_stable or _T["serie_dim"]
     n = len(categories)
 
     for i in range(n):
@@ -1817,7 +1819,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
             if categories[i] in focus:
                 couleur, alpha, lw, z = PALETTE[0], 1.0, 2.4, 4
             else:
-                couleur, alpha, lw, z = "#A8ABBC", 0.3, 1.4, 2
+                couleur, alpha, lw, z = _T["serie_dim"], 0.3, 1.4, 2
         else:
             if vd > vg:
                 couleur = couleur_hausse
@@ -1872,7 +1874,7 @@ def slope(categories: list, valeurs_gauche: list, valeurs_droite: list,
 def facet(data, x: str = None, y: str = None, par: str = None,
           type_graphique="ligne", ncols=3, meme_echelle=True, titre="",
           sous_titre="", note="", partager_legende=True, figsize=None, ax=None,
-          format=None, **kwargs):
+          format=None, background=None, **kwargs):
     """
     Petits multiples : répète le même graphique pour chaque valeur unique de
     `par`, sur une grille, pour comparer des sous-groupes côte à côte.
@@ -1925,12 +1927,14 @@ def facet(data, x: str = None, y: str = None, par: str = None,
     n = len(groupes)
     nrows = int(np.ceil(n / ncols))
     fig = plt.figure(figsize=figsize or (ncols * 4.5, nrows * 3.6))
+    _appliquer_background(fig, None, background)
     gs = fig.add_gridspec(nrows, ncols, hspace=0.55, wspace=0.3)
 
     axes = []
     for idx in range(nrows * ncols):
         row, col = divmod(idx, ncols)
         ax_i = fig.add_subplot(gs[row, col])
+        _appliquer_background(fig, ax_i, background)
         axes.append(ax_i)
         if idx >= n:
             ax_i.set_visible(False)
@@ -1984,7 +1988,7 @@ def facet(data, x: str = None, y: str = None, par: str = None,
 # ⑱ Dashboard multi-graphiques
 # ══════════════════════════════════════════════════════════════════════════════
 
-def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None):
+def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None, background=None):
     """
     Génère une grille de graphiques dans une seule figure.
 
@@ -2013,6 +2017,7 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None
     n = len(configs)
     nrows = (n + ncols - 1) // ncols
     fig = plt.figure(figsize=figsize or (ncols * 6, nrows * 4.2))
+    _appliquer_background(fig, None, background)
     gs = fig.add_gridspec(nrows, ncols, hspace=0.5, wspace=0.3)
 
     _fn_map = {
@@ -2030,6 +2035,7 @@ def dashboard(configs: list, titre_global="", ncols=2, figsize=None, format=None
     for idx in range(nrows * ncols):
         row, col = divmod(idx, ncols)
         ax = fig.add_subplot(gs[row, col])
+        _appliquer_background(fig, ax, background)
         axes.append(ax)
         if idx >= n:
             ax.set_visible(False)
@@ -2091,7 +2097,7 @@ def _dessiner_kpi(ax, kpi: dict, style: dict) -> None:
     """
     couleur_accent = kpi.get("couleur", PALETTE[0])
     positif        = kpi.get("positif", True)
-    couleur_delta  = "#2DC653" if positif else "#E63946"
+    couleur_delta  = _COULEUR_HAUT if positif else _COULEUR_BAS
 
     # ── Fond ──────────────────────────────────────────────────────────────
     if style.get("bg_fill"):
@@ -2149,7 +2155,7 @@ def _dessiner_kpi(ax, kpi: dict, style: dict) -> None:
 
 def layout_rapport(titre="", sous_titre="", note="", kpis=None,
                    n_graphiques=1, figsize=None, format="slide",
-                   style_kpi="accent"):
+                   style_kpi="accent", background=None):
     """
     Gabarit slide/rapport prêt à l'emploi : titre, tuiles KPI et zone(s) graphique.
 
@@ -2223,7 +2229,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
 
     fig_size = _resoudre_figsize(figsize, format) or FORMATS["slide"]
     fig = plt.figure(figsize=fig_size)
-    fig.patch.set_facecolor(_T["bg"])
+    _appliquer_background(fig, None, background)
 
     has_header = bool(titre or sous_titre or n_kpis > 0)
 
@@ -2249,7 +2255,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
     axes_kpis = []
     if has_header:
         ax_h = fig.add_subplot(gs[0, :title_cols])
-        ax_h.set_facecolor(_T["bg"])
+        _appliquer_background(fig, ax_h, background)
         ax_h.set_axis_off()
 
         if titre:
@@ -2278,7 +2284,7 @@ def layout_rapport(titre="", sous_titre="", note="", kpis=None,
         c0 = j * chart_largeur
         c1 = (j + 1) * chart_largeur if j < n_graphiques - 1 else NCOLS
         ax_c = fig.add_subplot(gs[chart_row, c0:c1])
-        ax_c.set_facecolor(_T["bg"])
+        _appliquer_background(fig, ax_c, background)
         axes_charts.append(ax_c)
 
     # ── Note de bas de page ───────────────────────────────────────────────
