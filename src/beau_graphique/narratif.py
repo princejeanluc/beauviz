@@ -60,11 +60,18 @@ def _t():
     return _bg._T
 
 
-def _init_ax(figsize, background=None):
-    """Crée une figure/axe stylée en lisant le thème actif."""
+def _init_ax(figsize, background=None, ax=None):
+    """Crée ou réutilise une figure/axe stylée en lisant le thème actif.
+
+    Si ``ax`` est fourni (ex: depuis slide()), on dessine dans cet axe
+    existant sans créer de nouvelle figure.
+    """
     import beau_graphique as _bg
-    fig, ax = plt.subplots(figsize=figsize or (11, 5.5))
-    _bg._appliquer_background(fig, ax, background)
+    if ax is not None:
+        fig = ax.get_figure()
+    else:
+        fig, ax = plt.subplots(figsize=figsize or (11, 5.5))
+        _bg._appliquer_background(fig, ax, background)
     T = _t()
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -90,8 +97,9 @@ def _header(fig, ax, titre, sous_titre, note):
                  style="italic", transform=fig.transFigure)
 
 
-def _finalize(fig):
-    fig.tight_layout()
+def _finalize(fig, skip_layout=False):
+    if not skip_layout:
+        fig.tight_layout()
     return fig
 
 
@@ -763,3 +771,275 @@ def barres_connectees(categories: list, periodes: list, valeurs: list,
 
     _header(fig, ax, titre, sous_titre, note)
     return _finalize(fig), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑨ cascade — graphique en cascade / waterfall (bridge chart)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cascade(categories, valeurs,
+            label_total="Total",
+            titre="", sous_titre="", note="",
+            accent_pos=None, accent_neg=None, couleur_total=None,
+            fmt="{:+.0f}", fmt_total="{:.0f}",
+            figsize=None, format=None, background=None, ax=None):
+    """Graphique en cascade (waterfall/bridge) — contributions pos/neg cumulées.
+
+    Idéal pour : décomposition P&L, budget variance, évolution de KPI.
+
+    Le premier élément = valeur de départ (absolu).
+    Les éléments intermédiaires = deltas (positif ou négatif).
+    L'élément portant ``label_total`` = valeur finale (absolu, depuis 0).
+
+    Exemple
+    -------
+    >>> cascade(
+    ...     categories=["Départ", "Nouveaux", "Churn", "Upsell", "Arrivée"],
+    ...     valeurs=[1200, 340, -180, 90, 1450],
+    ...     label_total="Arrivée",
+    ...     titre="MRR : +250 k€ sur le trimestre",
+    ... )
+    """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
+    T = _t()
+    accent_pos    = accent_pos    or ACCENTS["vert"]
+    accent_neg    = accent_neg    or ACCENTS["rouge"]
+    couleur_total = couleur_total or T["texte_dim"]
+
+    n = len(categories)
+    external_ax = ax is not None
+    fig, ax = _init_ax(figsize or (max(9, n * 1.3), 5.5), background, ax=ax)
+
+    cumuls, hauteurs, couleurs_b = [], [], []
+    running = 0.0
+
+    for i, (cat, val) in enumerate(zip(categories, valeurs)):
+        is_total = (cat == label_total)
+        is_start = (i == 0)
+        fval = float(val)
+        if is_start or is_total:
+            cumuls.append(0)
+            hauteurs.append(fval)
+            couleurs_b.append(couleur_total)
+            if is_start:
+                running = fval
+        else:
+            bottom = running if fval >= 0 else running + fval
+            cumuls.append(bottom)
+            hauteurs.append(abs(fval))
+            couleurs_b.append(accent_pos if fval >= 0 else accent_neg)
+            running += fval
+
+    ymax = max(c + h for c, h in zip(cumuls, hauteurs))
+    ymin = min(cumuls)
+
+    for i, (cat, h, b, col) in enumerate(zip(categories, hauteurs, cumuls, couleurs_b)):
+        ax.bar(i, h, bottom=b, color=col, width=0.55, alpha=0.88, zorder=3)
+
+        is_total = (cat == label_total)
+        is_start = (i == 0)
+        label_txt = (fmt_total.format(b + h) if (is_total or is_start)
+                     else fmt.format(float(valeurs[i])))
+        ax.text(i, b + h / 2, label_txt,
+                ha="center", va="center", fontsize=9.5, fontweight="bold",
+                color="white" if h > (ymax - ymin) * 0.06 else T["texte"])
+
+        if i < n - 1 and not (cat == label_total):
+            ax.plot([i + 0.28, i + 0.72], [b + h, b + h],
+                    color=T["grille"], lw=0.9, ls="--", zorder=2)
+
+    ax.set_xticks(range(n))
+    ax.set_xticklabels(categories, color=T["texte_dim"], fontsize=9.5)
+    ax.set_xlim(-0.6, n - 0.4)
+    ax.set_ylim(min(0, ymin) - (ymax - ymin) * 0.05, ymax * 1.18)
+    ax.axhline(0, color=T["grille"], lw=0.8, zorder=1)
+    ax.yaxis.set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_color(T["grille"])
+    ax.grid(visible=False)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig, skip_layout=external_ax), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑩ pente — slope chart (comparaison 2 périodes, N entités)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def pente(categories, valeurs_avant, valeurs_apres,
+          label_avant="Période A", label_apres="Période B",
+          titre="", sous_titre="", note="",
+          accent=ACCENT_DEFAUT, top_n=3,
+          fmt="{:.0f}", figsize=None, format=None, background=None, ax=None):
+    """Slope chart — compare N entités entre deux périodes.
+
+    Les entités à variation absolue la plus forte reçoivent l'accent.
+    Idéal pour : classements avant/après, évolutions comparées.
+
+    Exemple
+    -------
+    >>> pente(
+    ...     categories=["France", "Allemagne", "Espagne", "Italie"],
+    ...     valeurs_avant=[72, 68, 61, 55],
+    ...     valeurs_apres=[78, 65, 70, 52],
+    ...     label_avant="2022", label_apres="2024",
+    ...     titre="L'Espagne gagne 9 pts — plus forte progression",
+    ...     top_n=1, accent=ACCENTS["orange"]
+    ... )
+    """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
+    T = _t()
+    n = len(categories)
+
+    deltas  = [abs(b - a) for a, b in zip(valeurs_avant, valeurs_apres)]
+    top_idx = set(np.argsort(deltas)[-top_n:])
+
+    external_ax = ax is not None
+    fig, ax = _init_ax(figsize or (7, max(5, n * 0.85)), background, ax=ax)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.grid(visible=False)
+    ax.yaxis.set_visible(False)
+    ax.xaxis.set_visible(False)
+
+    x0, x1 = 0.28, 0.72
+    all_vals = list(valeurs_avant) + list(valeurs_apres)
+    vmin, vmax_ = min(all_vals), max(all_vals)
+    span = vmax_ - vmin or 1
+
+    def yn(v):
+        return (v - vmin) / span * 0.80 + 0.08
+
+    for i, (cat, va, vb) in enumerate(zip(categories, valeurs_avant, valeurs_apres)):
+        is_f = i in top_idx
+        col  = accent if is_f else T["serie_dim"]
+        alph = 1.0 if is_f else 0.40
+        ya, yb = yn(va), yn(vb)
+        ax.plot([x0, x1], [ya, yb], color=col, lw=2.5 if is_f else 1.0,
+                alpha=alph, zorder=3, transform=ax.transAxes)
+        ax.scatter([x0, x1], [ya, yb], color=col, s=45 if is_f else 22,
+                   alpha=alph, zorder=4, edgecolors=T["bg"], linewidths=1.0,
+                   transform=ax.transAxes)
+        ax.text(x0 - 0.03, ya, f"{fmt.format(va)}  {cat}",
+                ha="right", va="center",
+                fontsize=9.5 if is_f else 8.5,
+                fontweight="bold" if is_f else "normal",
+                color=col if is_f else T["texte_dim"],
+                transform=ax.transAxes)
+        arrow = "▲" if vb > va else ("▼" if vb < va else "–")
+        col_arr = (ACCENTS["vert"] if vb > va else
+                   ACCENTS["rouge"] if vb < va else T["texte_dim"])
+        ax.text(x1 + 0.03, yb, f"{arrow} {fmt.format(vb)}",
+                ha="left", va="center",
+                fontsize=9.5 if is_f else 8.5,
+                fontweight="bold" if is_f else "normal",
+                color=col_arr if is_f else T["texte_dim"],
+                transform=ax.transAxes)
+
+    for xv, lbl in [(x0, label_avant), (x1, label_apres)]:
+        ax.text(xv, 0.965, lbl, ha="center", va="bottom",
+                fontsize=11, fontweight="bold", color=T["texte"],
+                transform=ax.transAxes)
+        ax.axvline(xv, color=T["grille"], lw=0.7, ymin=0.04, ymax=0.93)
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig, skip_layout=external_ax), ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑪ nuage_annote — scatter annoté avec bulles et quadrants
+# ══════════════════════════════════════════════════════════════════════════════
+
+def nuage_annote(x, y, labels,
+                 tailles=None, couleurs=None, focus=None,
+                 titre="", sous_titre="", note="",
+                 label_x="", label_y="",
+                 accent=ACCENT_DEFAUT,
+                 quadrants=False, quadrant_labels=("", "", "", ""),
+                 figsize=None, format=None, background=None, ax=None):
+    """Scatter annoté — chaque point labellisé, les points en focus = accent.
+
+    Bulles optionnelles (tailles) et quadrants de positionnement.
+
+    Parameters
+    ----------
+    tailles : liste de float — rayon visuel des bulles (optionnel)
+    focus   : int ou liste d'ints — indices des points à mettre en valeur
+    quadrants : True → lignes médianes + libellés de quadrant
+    quadrant_labels : (haut-gauche, haut-droite, bas-gauche, bas-droite)
+
+    Exemple
+    -------
+    >>> nuage_annote(
+    ...     x=[22, 45, 78, 31, 60],
+    ...     y=[3.2, 1.8, 4.5, 2.1, 3.8],
+    ...     labels=["A", "B", "C", "D", "E"],
+    ...     tailles=[100, 200, 500, 80, 320],
+    ...     focus=2,
+    ...     quadrants=True,
+    ...     quadrant_labels=("Faible/Fort", "Fort/Fort",
+    ...                       "Faible/Faible", "Fort/Faible"),
+    ... )
+    """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
+    T = _t()
+    external_ax = ax is not None
+    fig, ax = _init_ax(figsize or (10, 6.5), background, ax=ax)
+
+    if focus is None:
+        focus = []
+    elif isinstance(focus, int):
+        focus = [focus]
+
+    n = len(x)
+    if tailles is None:
+        s_norm = [120] * n
+    else:
+        s_min, s_max = min(tailles), max(tailles)
+        span = s_max - s_min or 1
+        s_norm = [80 + (s - s_min) / span * 500 for s in tailles]
+
+    if couleurs is None:
+        couleurs = [accent if i in focus else T["serie_dim"] for i in range(n)]
+
+    for i, (xi, yi, lab, sz, col) in enumerate(
+            zip(x, y, labels, s_norm, couleurs)):
+        is_f = i in focus
+        ax.scatter(xi, yi, s=sz, color=col, alpha=0.88 if is_f else 0.40,
+                   edgecolors=T["bg"], linewidths=1.2, zorder=4)
+        ax.annotate(lab, xy=(xi, yi), xytext=(6, 6),
+                    textcoords="offset points",
+                    fontsize=10 if is_f else 8.5,
+                    fontweight="bold" if is_f else "normal",
+                    color=T["texte"] if is_f else T["texte_dim"],
+                    zorder=5)
+
+    if quadrants:
+        xm, ym = np.median(x), np.median(y)
+        ax.axvline(xm, color=T["grille"], lw=0.9, ls="--", alpha=0.7, zorder=1)
+        ax.axhline(ym, color=T["grille"], lw=0.9, ls="--", alpha=0.7, zorder=1)
+        x0_, x1_ = ax.get_xlim()
+        y0_, y1_ = ax.get_ylim()
+        ql = quadrant_labels
+        for txt, qx, qy in [
+            (ql[0], (x0_ + xm)/2, ym + (y1_-ym)*0.85),
+            (ql[1], (xm + x1_)/2, ym + (y1_-ym)*0.85),
+            (ql[2], (x0_ + xm)/2, y0_ + (ym-y0_)*0.15),
+            (ql[3], (xm + x1_)/2, y0_ + (ym-y0_)*0.15),
+        ]:
+            if txt:
+                ax.text(qx, qy, txt, ha="center", va="center",
+                        fontsize=9, color=T["texte_dim"],
+                        fontstyle="italic", alpha=0.75)
+
+    ax.set_xlabel(label_x, fontsize=10, color=T["texte_dim"], labelpad=8)
+    ax.set_ylabel(label_y, fontsize=10, color=T["texte_dim"], labelpad=8)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig, skip_layout=external_ax), ax
+

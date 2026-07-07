@@ -1,0 +1,875 @@
+<title>Guide d'autonomie · beau_graphique</title>
+
+<style>
+:root {
+  --topbar-h: 46px;
+  --nav-w: 212px;
+  --bg:         #F7F8FC;
+  --bg-raised:  #ECEEF8;
+  --bg-code:    #E2E6F5;
+  --text:       #1B1D2C;
+  --text-dim:   #545770;
+  --text-muted: #8A8DA6;
+  --accent:     #4361EE;
+  --accent-bg:  #D2DAFC;
+  --ok:         #2DC653;
+  --ok-bg:      #CBF0D8;
+  --warn:       #E63946;
+  --warn-bg:    #FAD4D6;
+  --border:     #D0D4EC;
+  --syn-kw:  #3A52D4;
+  --syn-fn:  #7B10CC;
+  --syn-str: #186E38;
+  --syn-cm:  #8A8DA6;
+  --syn-num: #B84800;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:         #10121B;
+    --bg-raised:  #181A28;
+    --bg-code:    #1A1D2E;
+    --text:       #E0E3F2;
+    --text-dim:   #8E92B0;
+    --text-muted: #555870;
+    --accent:     #6D84FF;
+    --accent-bg:  #1A2148;
+    --ok:         #40D968;
+    --ok-bg:      #0C2318;
+    --warn:       #FF6370;
+    --warn-bg:    #250E10;
+    --border:     #242740;
+    --syn-kw:  #6D84FF;
+    --syn-fn:  #C084FC;
+    --syn-str: #4ADE80;
+    --syn-cm:  #555870;
+    --syn-num: #F3722C;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#10121B; --bg-raised:#181A28; --bg-code:#1A1D2E;
+  --text:#E0E3F2; --text-dim:#8E92B0; --text-muted:#555870;
+  --accent:#6D84FF; --accent-bg:#1A2148;
+  --ok:#40D968; --ok-bg:#0C2318;
+  --warn:#FF6370; --warn-bg:#250E10;
+  --border:#242740;
+  --syn-kw:#6D84FF; --syn-fn:#C084FC; --syn-str:#4ADE80;
+  --syn-cm:#555870; --syn-num:#F3722C;
+}
+:root[data-theme="light"] {
+  --bg:#F7F8FC; --bg-raised:#ECEEF8; --bg-code:#E2E6F5;
+  --text:#1B1D2C; --text-dim:#545770; --text-muted:#8A8DA6;
+  --accent:#4361EE; --accent-bg:#D2DAFC;
+  --ok:#2DC653; --ok-bg:#CBF0D8;
+  --warn:#E63946; --warn-bg:#FAD4D6;
+  --border:#D0D4EC;
+  --syn-kw:#3A52D4; --syn-fn:#7B10CC; --syn-str:#186E38;
+  --syn-cm:#8A8DA6; --syn-num:#B84800;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.75;
+}
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* ── Topbar ───────────────────────────────────────────────── */
+.topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0 1.4rem;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.tb-name {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-weight: 800; font-size: 0.88rem; color: var(--accent); letter-spacing:-0.01em;
+}
+.tb-sep { color: var(--border); font-size: 1.1rem; }
+.tb-sub {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.8rem; color: var(--text-muted);
+}
+.tb-badge {
+  margin-left: auto;
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.7rem; font-weight: 700;
+  color: var(--accent); background: var(--accent-bg);
+  padding: 0.15em 0.55em; border-radius: 3px; letter-spacing: 0.04em;
+}
+
+/* ── Shell ────────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr;
+  min-height: calc(100vh - var(--topbar-h));
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+  padding: 1.6rem 0 2rem;
+}
+.nav-group { margin-bottom: 1.5rem; }
+.nav-group-label {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.63rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 0 1rem; margin-bottom: 0.25rem; display: block;
+}
+.nav-link {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.79rem; color: var(--text-dim);
+  text-decoration: none; padding: 0.28rem 1rem;
+  border-left: 2px solid transparent;
+  transition: color .12s, background .12s;
+}
+.nav-link:hover { color: var(--accent); background: var(--accent-bg); }
+.nav-link.active {
+  color: var(--accent); border-left-color: var(--accent);
+  background: var(--accent-bg); font-weight: 600;
+}
+.nav-n {
+  font-size: 0.61rem; font-weight: 700; color: var(--text-muted);
+  min-width: 1rem; font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+}
+.nav-link.active .nav-n { color: var(--accent); opacity: .65; }
+
+/* ── Content ──────────────────────────────────────────────── */
+.content { padding: 2.8rem 3rem 6rem; min-width: 0; }
+section { max-width: 66ch; margin-bottom: 5rem; scroll-margin-top: 3.5rem; }
+section:last-child { margin-bottom: 0; }
+
+/* ── Headings ─────────────────────────────────────────────── */
+.eyebrow {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.67rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 0.3rem; display: block;
+}
+h2 {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 1.55rem; font-weight: 800; letter-spacing: -0.028em;
+  line-height: 1.2; color: var(--text); text-wrap: balance;
+  margin-bottom: 1.1rem;
+}
+h3 {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.98rem; font-weight: 700; color: var(--text);
+  margin: 2rem 0 0.65rem; text-wrap: balance;
+}
+
+/* ── Body ─────────────────────────────────────────────────── */
+p { margin-bottom: 0.8rem; }
+ul, ol { padding-left: 1.4rem; margin-bottom: 0.8rem; }
+li { margin-bottom: 0.25rem; }
+strong { font-weight: 700; }
+
+/* ── Inline code ──────────────────────────────────────────── */
+code {
+  font-family: Consolas,"Courier New",monospace;
+  font-size: 0.83em; background: var(--bg-code);
+  color: var(--syn-kw); padding: 0.08em 0.32em; border-radius: 3px;
+}
+
+/* ── Code blocks ──────────────────────────────────────────── */
+.pre-wrap { overflow-x: auto; border-radius: 6px; border: 1px solid var(--border); margin: 1rem 0; }
+pre {
+  background: var(--bg-code); color: var(--text);
+  font-family: Consolas,"Courier New",monospace;
+  font-size: 0.8rem; line-height: 1.65; padding: 0.95rem 1.1rem; margin: 0;
+}
+pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+.kw  { color: var(--syn-kw); font-weight: 600; }
+.fn  { color: var(--syn-fn); }
+.str { color: var(--syn-str); }
+.cm  { color: var(--syn-cm); font-style: italic; }
+.num { color: var(--syn-num); }
+
+/* ── Callouts ─────────────────────────────────────────────── */
+.callout {
+  border-radius: 5px; padding: 0.75rem 1rem; margin: 1rem 0;
+  border-left: 3px solid;
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.86rem; line-height: 1.55;
+}
+.callout .clabel {
+  font-size: 0.63rem; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 0.28rem; display: block;
+}
+.callout.info  { background: var(--accent-bg); border-color: var(--accent); }
+.callout.info  .clabel { color: var(--accent); }
+.callout.ok    { background: var(--ok-bg);    border-color: var(--ok); }
+.callout.ok    .clabel { color: var(--ok); }
+.callout.warn  { background: var(--warn-bg);  border-color: var(--warn); }
+.callout.warn  .clabel { color: var(--warn); }
+.callout ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+.callout li { margin-bottom: 0.18rem; }
+.callout code { font-size: 0.81em; }
+
+/* ── Tables ───────────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; border-radius: 6px; border: 1px solid var(--border); margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size: 0.81rem; }
+th {
+  background: var(--bg-raised); padding: 0.5rem 0.85rem;
+  text-align: left; font-weight: 700; font-size: 0.65rem;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-dim); border-bottom: 1px solid var(--border);
+}
+td { padding: 0.48rem 0.85rem; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+tr:last-child td { border-bottom: none; }
+.c-ok   { color: var(--ok);   font-weight: 700; }
+.c-warn { color: var(--warn); font-weight: 700; }
+td code { font-size: 0.79em; }
+
+/* ── Cards ────────────────────────────────────────────────── */
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin: 1rem 0; }
+.card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 6px; padding: 0.85rem 1rem; }
+.card-title {
+  font-family: Consolas,"Courier New",monospace;
+  font-size: 0.77rem; font-weight: 700; color: var(--accent); margin-bottom: 0.38rem;
+}
+.card p {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.8rem; color: var(--text-dim); margin: 0; line-height: 1.5;
+}
+
+/* ── Steps ────────────────────────────────────────────────── */
+.steps { list-style: none; padding: 0; counter-reset: step; }
+.steps li {
+  counter-increment: step;
+  display: grid; grid-template-columns: 1.7rem 1fr;
+  gap: 0.65rem; margin-bottom: 0.85rem; align-items: start;
+}
+.steps li::before {
+  content: counter(step);
+  width: 1.65rem; height: 1.65rem; border-radius: 50%;
+  background: var(--accent); color: white;
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.68rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 0.08rem;
+}
+.steps li > div {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.87rem; color: var(--text-dim);
+  padding-top: 0.08rem; line-height: 1.55;
+}
+.steps li > div strong { color: var(--text); }
+.steps li > div code { font-size: 0.8em; }
+
+/* ── Bug cards ────────────────────────────────────────────── */
+.bug { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 1.5rem; }
+.bug-head {
+  background: var(--warn-bg); border-bottom: 1px solid var(--border);
+  padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.65rem;
+}
+.bug-tag {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em;
+  color: white; background: var(--warn);
+  padding: 0.15em 0.5em; border-radius: 3px; text-transform: uppercase; flex-shrink: 0;
+}
+.bug-title {
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  font-size: 0.84rem; font-weight: 700; color: var(--warn);
+}
+.bug-body { padding: 0.85rem 1rem 0.5rem; }
+.bug-row {
+  display: grid; grid-template-columns: 72px 1fr;
+  gap: 0.5rem; margin-bottom: 0.6rem;
+  font-family: "Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size: 0.81rem;
+}
+.bug-k {
+  font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted); padding-top: 0.1rem;
+}
+.bug-v { color: var(--text-dim); line-height: 1.5; }
+.bug-v code { font-size: 0.79em; }
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static; height: auto; border-right: none;
+    border-bottom: 1px solid var(--border); padding: 0.8rem 0;
+    overflow-x: auto; display: flex; flex-wrap: nowrap;
+  }
+  .nav-group { display: flex; flex-wrap: nowrap; gap: 0.25rem; padding: 0 0.8rem; margin: 0; }
+  .nav-group-label { display: none; }
+  .nav-link { border-left: none; border-radius: 4px; padding: 0.28rem 0.6rem; white-space: nowrap; }
+  .nav-link.active { border-left: none; }
+  .content { padding: 1.4rem 1rem 3rem; }
+  .card-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<header class="topbar">
+  <span class="tb-name">beau_graphique</span>
+  <span class="tb-sep">/</span>
+  <span class="tb-sub">Guide d'autonomie</span>
+  <span class="tb-badge">v0.1.0</span>
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <nav>
+      <div class="nav-group">
+        <span class="nav-group-label">Fondamentaux</span>
+        <a class="nav-link" href="#anatomie"><span class="nav-n">01</span>Anatomie d'une librairie</a>
+        <a class="nav-link" href="#architecture"><span class="nav-n">02</span>Architecture du projet</a>
+        <a class="nav-link" href="#paradigmes"><span class="nav-n">03</span>Les paradigmes</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-group-label">Pratique</span>
+        <a class="nav-link" href="#ajouter"><span class="nav-n">04</span>Ajouter une fonction</a>
+        <a class="nav-link" href="#evoluer"><span class="nav-n">05</span>Faire évoluer sans casser</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-group-label">Nouveautés</span>
+        <a class="nav-link" href="#nouveautes"><span class="nav-n">06</span>Changelog fonctions</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-group-label">Maintenance</span>
+        <a class="nav-link" href="#pieges"><span class="nav-n">07</span>Journal des pièges</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="content">
+
+    <!-- ══ 01 ══════════════════════════════════════════════════════════ -->
+    <section id="anatomie">
+      <span class="eyebrow">01 — Fondamentaux</span>
+      <h2>Anatomie d'une librairie Python</h2>
+
+      <p>Une <strong>librairie</strong> est un ensemble de fichiers <code>.py</code> organisés pour être réutilisés dans d'autres projets. Quand tu écris <code>import beau_graphique</code>, Python cherche un fichier <code>beau_graphique.py</code> (module) ou un dossier <code>beau_graphique/</code> avec un <code>__init__.py</code> (package).</p>
+
+      <h3>Module vs Package — la distinction clé</h3>
+      <p>Un <strong>module</strong> = un seul fichier <code>.py</code>. Un <strong>package</strong> = un dossier avec plusieurs modules et un <code>__init__.py</code>. beau_graphique utilise des <em>modules plats</em> — chaque fichier est autonome, pas de sous-dossiers nécessaires :</p>
+
+      <div class="pre-wrap"><pre>src/beau_graphique/
+  beau_graphique.py   <span class="cm"># → import beau_graphique</span>
+  narratif.py         <span class="cm"># → import narratif</span>
+  pipeline.py         <span class="cm"># → import pipeline</span>
+  themes.py           <span class="cm"># → import themes</span></pre></div>
+
+      <h3>pyproject.toml — le fichier d'identité</h3>
+      <p>C'est le fichier que <code>pip</code> lit pour savoir comment installer la librairie. Les lignes importantes :</p>
+
+      <div class="pre-wrap"><pre>[project]
+name = <span class="str">"beau-graphique"</span>        <span class="cm"># nom pip (tirets acceptés ici)</span>
+version = <span class="str">"0.1.0"</span>
+dependencies = [<span class="str">"matplotlib>=3.5"</span>, <span class="str">"numpy"</span>]
+
+[tool.setuptools]
+py-modules = [<span class="str">"beau_graphique"</span>, <span class="str">"narratif"</span>, <span class="str">"pipeline"</span>, <span class="str">"themes"</span>]
+<span class="cm">#           ↑ liste des fichiers .py à installer</span>
+
+[tool.setuptools.package-dir]
+<span class="str">""</span> = <span class="str">"src/beau_graphique"</span>
+<span class="cm">#   ↑ où pip les trouve dans ce repo</span></pre></div>
+
+      <div class="callout info">
+        <span class="clabel">Règle</span>
+        Si tu ajoutes un nouveau fichier <code>.py</code> (ex. <code>export.py</code>), ajoute son nom à <code>py-modules</code> et relance <code>pip install -e .</code>.
+      </div>
+
+      <h3>pip install -e . — le mode développeur</h3>
+      <p>Le flag <code>-e</code> signifie <em>editable</em>. Pip crée un lien symbolique vers ton dossier source. Résultat : chaque modification dans les fichiers <code>.py</code> est immédiatement visible dans ton notebook ou script — sans réinstaller.</p>
+
+      <div class="pre-wrap"><pre><span class="cm"># À faire une seule fois, dans le dossier du projet</span>
+pip install -e .
+
+<span class="cm"># Vérification</span>
+python -c <span class="str">"import beau_graphique; print('OK')"</span></pre></div>
+
+      <h3>Comment Python résout un import</h3>
+      <ol>
+        <li>Il cherche dans les modules intégrés (<code>os</code>, <code>sys</code>…)</li>
+        <li>Il cherche dans <code>sys.path</code> — une liste de dossiers qui inclut le <em>site-packages</em> de ton environnement</li>
+        <li>Il charge le fichier <code>.py</code> et le met en <strong>cache</strong> dans <code>sys.modules</code></li>
+        <li>Les imports suivants du même module retournent le cache — le fichier n'est pas relu</li>
+      </ol>
+
+      <div class="callout warn">
+        <span class="clabel">Piège notebook</span>
+        Si tu modifies <code>beau_graphique.py</code> pendant qu'un notebook est ouvert, il faut <strong>relancer le kernel</strong> pour que les changements soient pris en compte. Le cache module ne se rafraîchit pas seul.
+      </div>
+    </section>
+
+    <!-- ══ 02 ══════════════════════════════════════════════════════════ -->
+    <section id="architecture">
+      <span class="eyebrow">02 — Fondamentaux</span>
+      <h2>Architecture de beau_graphique</h2>
+
+      <h3>Convention public / privé</h3>
+      <p>En Python, un nom commençant par <code>_</code> est <strong>privé</strong> — usage interne. Tout le reste est l'<strong>API publique</strong> que les utilisateurs appellent. Cette convention n'est pas imposée par le langage, mais elle est universellement respectée.</p>
+
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Nom</th><th>Visibilité</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td><code>barres()</code>, <code>ligne()</code>…</td><td>Public</td><td>API utilisateur — fonctions de graphiques</td></tr>
+          <tr><td><code>_T</code></td><td>Privé (dict)</td><td>Thème actif : 6 clés de couleurs sémantiques</td></tr>
+          <tr><td><code>_new_fig()</code></td><td>Privé (fn)</td><td>Crée figure + ax avec le bon fond</td></tr>
+          <tr><td><code>_appliquer_background()</code></td><td>Privé (fn)</td><td>Applique fond/transparence sur fig et ax</td></tr>
+          <tr><td><code>_finaliser()</code></td><td>Privé (fn)</td><td>Ajoute titre, sous-titre, note, grille, marges</td></tr>
+          <tr><td><code>PALETTE</code></td><td>Public (list)</td><td>8 couleurs du style actif</td></tr>
+          <tr><td><code>_COULEUR_HAUT / _BAS</code></td><td>Privé (str)</td><td>Vert/rouge sémantiques indépendants de PALETTE</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Flux d'une fonction typique</h3>
+      <p>Toutes les fonctions publiques suivent le même enchaînement en 4 étapes :</p>
+
+      <div class="pre-wrap"><pre><span class="kw">def</span> <span class="fn">barres</span>(categories, valeurs, titre=<span class="str">""</span>, ..., background=<span class="kw">None</span>):
+
+    <span class="cm"># 1 — Créer (ou réutiliser) la figure avec le fond correct</span>
+    fig, ax = <span class="fn">_new_fig</span>(figsize, ax, format, background)
+
+    <span class="cm"># 2 — Dessiner avec matplotlib</span>
+    ax.bar(x, valeurs, color=PALETTE[<span class="num">0</span> % <span class="fn">len</span>(PALETTE)])
+
+    <span class="cm"># 3 — Finaliser (titre, note, grille, marges)</span>
+    <span class="fn">_finaliser</span>(ax, titre, sous_titre, xlabel, ylabel, note)
+
+    <span class="cm"># 4 — Toujours retourner (fig, ax)</span>
+    <span class="kw">return</span> fig, ax</pre></div>
+
+      <h3>Le dict _T — thème actif</h3>
+      <p>C'est l'état global qui contrôle toutes les couleurs. Ses 6 clés sont un contrat respecté par toutes les fonctions :</p>
+
+      <div class="pre-wrap"><pre>_T = {
+    <span class="str">"bg"</span>:          <span class="str">"#F7F8FC"</span>,  <span class="cm"># fond de figure et axes</span>
+    <span class="str">"texte"</span>:       <span class="str">"#1A1C2E"</span>,  <span class="cm"># titres, labels principaux</span>
+    <span class="str">"texte_dim"</span>:   <span class="str">"#5C5F78"</span>,  <span class="cm"># ticks, annotations secondaires</span>
+    <span class="str">"grille"</span>:      <span class="str">"#D8DAE8"</span>,  <span class="cm"># lignes de grille, bordures</span>
+    <span class="str">"fond_neutre"</span>: <span class="str">"#EDEEF5"</span>,  <span class="cm"># zones de fond secondaires</span>
+    <span class="str">"serie_dim"</span>:   <span class="str">"#A8ABBC"</span>,  <span class="cm"># séries estompées, contexte</span>
+}</pre></div>
+
+      <div class="callout info">
+        <span class="clabel">Règle absolue</span>
+        Ne jamais ajouter une 7e clé sans mettre à jour <em>tous</em> les thèmes définis dans <code>themes.py</code>. Si un thème ne définit pas une clé, les fonctions qui la lisent lèvent une <code>KeyError</code>.
+      </div>
+
+      <h3>Les 4 modules et leur rôle</h3>
+      <div class="card-grid">
+        <div class="card"><div class="card-title">beau_graphique.py</div><p>Le cœur. Toutes les fonctions de graphiques, les helpers privés, PALETTE, _T et <code>bg.init()</code>.</p></div>
+        <div class="card"><div class="card-title">narratif.py</div><p>Graphiques à message unique (barres_focus, bullet_chart…). Lit le thème dynamiquement via <code>_t()</code>.</p></div>
+        <div class="card"><div class="card-title">pipeline.py</div><p>Composants de dashboard réutilisables. Appelle les fonctions de beau_graphique.</p></div>
+        <div class="card"><div class="card-title">themes.py</div><p>Définition des thèmes nommés. Chaque thème retourne un dict avec exactement les 6 clés de <code>_T</code>.</p></div>
+      </div>
+    </section>
+
+    <!-- ══ 03 ══════════════════════════════════════════════════════════ -->
+    <section id="paradigmes">
+      <span class="eyebrow">03 — Fondamentaux</span>
+      <h2>Les paradigmes utilisés</h2>
+
+      <p>Un <strong>paradigme</strong> est une façon d'organiser le code — pas un outil, mais un style de pensée. beau_graphique en combine trois, de façon pragmatique.</p>
+
+      <h3>1 · Procédural — la base</h3>
+      <p>Le code est organisé en <strong>fonctions</strong> qui s'appellent. Pas de classes, pas d'objets. Chaque fonction reçoit des données, fait quelque chose, retourne un résultat. C'est 95 % du code de beau_graphique.</p>
+      <div class="callout ok">
+        <span class="clabel">Avantage concret</span>
+        <code>barres(cat, vals)</code> fait une chose, retourne <code>(fig, ax)</code>, n'a pas d'état caché. Tu peux la lire de haut en bas sans suivre l'état d'un objet.
+      </div>
+
+      <h3>2 · Registre global — configuration partagée</h3>
+      <p>Le dict <code>_T</code> est une variable globale modifiée par <code>bg.init(theme=...)</code> et lue par toutes les fonctions. C'est le pattern "registre" : un état unique partagé en lecture.</p>
+
+      <div class="pre-wrap"><pre><span class="cm"># Écriture — une seule fois par session, via bg.init()</span>
+bg.init(theme=<span class="str">"dark"</span>)       <span class="cm"># modifie _T et les rcParams matplotlib</span>
+
+<span class="cm"># Lecture — dans chaque fonction, au moment du dessin</span>
+ax.set_facecolor(_T[<span class="str">"bg"</span>])   <span class="cm"># lit la valeur courante</span></pre></div>
+
+      <div class="callout warn">
+        <span class="clabel">Règle critique</span>
+        Seul <code>bg.init()</code> écrit dans <code>_T</code>. Si une fonction de graphique modifie <code>_T</code> directement, elle change le thème pour tout le monde — c'est un bug.
+      </div>
+
+      <h3>3 · Import dynamique — couplage tardif</h3>
+      <p>Dans <code>narratif.py</code>, le thème est lu <em>au moment de l'appel</em> de chaque fonction, pas au moment de l'import du module. Technique :</p>
+
+      <div class="pre-wrap"><pre><span class="cm"># Dans narratif.py</span>
+<span class="kw">def</span> <span class="fn">_t</span>():
+    <span class="kw">import</span> beau_graphique <span class="kw">as</span> _bg
+    <span class="kw">return</span> _bg._T     <span class="cm"># lit _T tel qu'il est maintenant</span>
+
+<span class="kw">def</span> <span class="fn">barres_focus</span>(categories, valeurs, ...):
+    T = <span class="fn">_t</span>()                  <span class="cm"># lecture du thème à l'instant t</span>
+    ax.set_facecolor(T[<span class="str">"bg"</span>])  <span class="cm"># utilise le thème actif</span></pre></div>
+
+      <div class="callout info">
+        <span class="clabel">Pourquoi pas "from beau_graphique import _T" en haut du fichier ?</span>
+        Parce que <code>bg.init()</code> <em>remplace</em> le contenu de <code>_T</code> entièrement. Si tu en avais fait une copie à l'import, ta copie pointerait vers l'ancien objet. En passant par le module (<code>_bg._T</code>), tu lis toujours la valeur courante.
+      </div>
+
+      <h3>Constantes sémantiques vs index de palette</h3>
+      <p>Distinction critique qui a causé un bug réel :</p>
+
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Type de couleur</th><th>Comment accéder</th><th>Pourquoi</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Hausse / positif</strong></td><td><code>_COULEUR_HAUT</code></td><td>Vert = vérité sémantique, indépendante de la palette</td></tr>
+          <tr><td><strong>Baisse / négatif</strong></td><td><code>_COULEUR_BAS</code></td><td>Rouge = vérité sémantique</td></tr>
+          <tr><td><strong>Série esthétique n°2</strong></td><td><code>PALETTE[1 % len(PALETTE)]</code></td><td>L'index peut varier si la palette est courte</td></tr>
+          <tr><td><strong>Couleurs de thème</strong></td><td><code>_T["texte"]</code>, <code>_T["grille"]</code></td><td>S'adaptent automatiquement au thème actif</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn">
+        <span class="clabel">Ne jamais écrire</span>
+        <code>PALETTE[6]</code> directement. Si l'utilisateur définit une palette de 4 couleurs, <code>PALETTE[6]</code> lève une <code>IndexError</code>. Toujours écrire <code>PALETTE[6 % len(PALETTE)]</code>.
+      </div>
+    </section>
+
+    <!-- ══ 04 ══════════════════════════════════════════════════════════ -->
+    <section id="ajouter">
+      <span class="eyebrow">04 — Pratique</span>
+      <h2>Ajouter une nouvelle fonction de graphique</h2>
+
+      <p>Toutes les fonctions publiques partagent le même squelette. Copie-colle ce template et remplis la section "Dessiner".</p>
+
+      <h3>Le template complet</h3>
+      <div class="pre-wrap"><pre><span class="kw">def</span> <span class="fn">mon_graphique</span>(
+    categories,
+    valeurs,
+    titre=<span class="str">""</span>,
+    sous_titre=<span class="str">""</span>,
+    xlabel=<span class="str">""</span>,
+    ylabel=<span class="str">""</span>,
+    note=<span class="str">""</span>,
+    figsize=<span class="kw">None</span>,
+    ax=<span class="kw">None</span>,
+    format=<span class="kw">None</span>,
+    background=<span class="kw">None</span>,    <span class="cm"># toujours en dernier des params standards</span>
+    **_extra,              <span class="cm"># absorbe kwargs inconnus (pipeline/dashboard)</span>
+):
+    <span class="cm"># 1 — Figure</span>
+    fig, ax = <span class="fn">_new_fig</span>(figsize, ax, format, background)
+
+    <span class="cm"># 2 — Dessin</span>
+    couleur = PALETTE[<span class="num">0</span> % <span class="fn">len</span>(PALETTE)]
+    ax.bar(categories, valeurs, color=couleur, width=<span class="num">0.6</span>)
+
+    <span class="cm"># 3 — Finalisation</span>
+    <span class="fn">_finaliser</span>(ax, titre, sous_titre, xlabel=xlabel, ylabel=ylabel, note=note)
+
+    <span class="cm"># 4 — Retour</span>
+    <span class="kw">return</span> fig, ax</pre></div>
+
+      <h3>Étapes</h3>
+      <ol class="steps">
+        <li><div><strong>Écrire la fonction</strong> dans <code>beau_graphique.py</code>, après les fonctions similaires. Respecter l'ordre des params : <code>titre, sous_titre, xlabel, ylabel, note, figsize, ax, format, background, **_extra</code>.</div></li>
+        <li><div><strong>Utiliser uniquement les couleurs de thème</strong> — jamais un hex en dur. Séries : <code>PALETTE[i % len(PALETTE)]</code>. Thème : <code>_T["bg"]</code>, <code>_T["texte"]</code>… Hausse/baisse : <code>_COULEUR_HAUT</code> / <code>_COULEUR_BAS</code>.</div></li>
+        <li><div><strong>Écrire au moins un test de fumée</strong> (voir ci-dessous) dans le dossier <code>tests/</code>.</div></li>
+        <li><div><strong>Lancer les tests</strong> : <code>py -3.11 -m pytest tests/ -v</code>. Si un test existant casse, tu as introduit une régression.</div></li>
+        <li><div><strong>Committer</strong> : <code>git add src/beau_graphique/beau_graphique.py tests/&lt;ton-fichier&gt;.py</code> puis <code>git commit -m "feat: ajouter mon_graphique"</code>.</div></li>
+      </ol>
+
+      <h3>Le test de fumée</h3>
+      <p>Un test de fumée vérifie que la fonction s'exécute sans exception et retourne les bons types. Il ne vérifie pas l'apparence visuelle — ça, seul l'œil humain peut le faire.</p>
+
+      <div class="pre-wrap"><pre><span class="cm"># tests/test_mon_graphique.py</span>
+<span class="kw">import</span> matplotlib
+matplotlib.use(<span class="str">"Agg"</span>)   <span class="cm"># pas d'écran requis pour les tests</span>
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+
+
+<span class="kw">def</span> <span class="fn">test_smoke</span>():
+    <span class="kw">from</span> beau_graphique <span class="kw">import</span> mon_graphique
+    fig, ax = <span class="fn">mon_graphique</span>([<span class="str">"A"</span>, <span class="str">"B"</span>, <span class="str">"C"</span>], [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>])
+    <span class="kw">assert</span> ax <span class="kw">is not</span> <span class="kw">None</span>
+    plt.close(<span class="str">"all"</span>)
+
+
+<span class="kw">def</span> <span class="fn">test_retourne_tuple</span>():
+    <span class="kw">from</span> beau_graphique <span class="kw">import</span> mon_graphique
+    result = <span class="fn">mon_graphique</span>([<span class="str">"A"</span>], [<span class="num">10</span>])
+    <span class="kw">assert</span> <span class="fn">isinstance</span>(result, <span class="fn">tuple</span>) <span class="kw">and</span> <span class="fn">len</span>(result) == <span class="num">2</span>
+    plt.close(<span class="str">"all"</span>)
+
+
+<span class="kw">def</span> <span class="fn">test_background_transparent</span>():
+    <span class="kw">from</span> beau_graphique <span class="kw">import</span> mon_graphique
+    fig, _ = <span class="fn">mon_graphique</span>([<span class="str">"A"</span>], [<span class="num">10</span>], background=<span class="str">"transparent"</span>)
+    <span class="kw">assert</span> fig.patch.get_alpha() == <span class="num">0</span>
+    plt.close(<span class="str">"all"</span>)</pre></div>
+
+      <div class="callout ok">
+        <span class="clabel">Checklist — À faire</span>
+        <ul>
+          <li>Toujours <code>return fig, ax</code></li>
+          <li>Toujours passer par <code>_new_fig()</code> — jamais <code>plt.subplots()</code> directement</li>
+          <li><code>background=None</code> comme avant-dernier param (avant <code>**_extra</code>)</li>
+          <li>Couleurs via <code>_T[...]</code> ou <code>PALETTE[i % len(PALETTE)]</code></li>
+          <li>Inclure <code>**_extra</code> pour la compatibilité pipeline</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <span class="clabel">À ne jamais faire</span>
+        <ul>
+          <li>Un hex en dur dans le corps d'une fonction : <code>color="#2A2D42"</code></li>
+          <li>Appeler <code>plt.show()</code> — le notebook décide quand afficher</li>
+          <li>Modifier <code>_T</code> directement depuis une fonction de graphique</li>
+          <li>Indexer PALETTE sans modulo : <code>PALETTE[5]</code></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ══ 05 ══════════════════════════════════════════════════════════ -->
+    <section id="evoluer">
+      <span class="eyebrow">05 — Pratique</span>
+      <h2>Faire évoluer sans casser</h2>
+
+      <p>Le risque principal quand on modifie une librairie est de <strong>casser le code des utilisateurs</strong> qui appellent déjà les fonctions existantes. La règle : ce qui fonctionnait avant doit continuer à fonctionner après.</p>
+
+      <h3>Tableau des changements</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Changement</th><th>Risque</th><th>Règle pratique</th></tr></thead>
+        <tbody>
+          <tr><td>Ajouter un paramètre avec valeur par défaut</td><td class="c-ok">Sûr</td><td>L'utilisateur existant ne passe pas le param — il ne voit rien changer</td></tr>
+          <tr><td>Ajouter une nouvelle fonction</td><td class="c-ok">Sûr</td><td>Pas de conflit avec l'existant</td></tr>
+          <tr><td>Modifier l'apparence interne (épaisseur, marge)</td><td class="c-ok">Sûr</td><td>L'API ne change pas, seul le résultat visuel évolue</td></tr>
+          <tr><td>Ajouter une clé à <code>_T</code></td><td class="c-warn">Attention</td><td>Mettre à jour <em>tous</em> les thèmes dans <code>themes.py</code> simultanément</td></tr>
+          <tr><td>Renommer un paramètre existant</td><td class="c-warn">Cassant</td><td>Garder l'ancien nom en alias : <code>ancien = ancien or nouveau</code></td></tr>
+          <tr><td>Supprimer une fonction</td><td class="c-warn">Cassant</td><td>Laisser la fonction avec un message d'avertissement (<code>warnings.warn</code>)</td></tr>
+          <tr><td>Changer le type de retour</td><td class="c-warn">Cassant</td><td>Toutes les fonctions retournent <code>(fig, ax)</code> — ne pas changer</td></tr>
+          <tr><td>Modifier PALETTE directement</td><td class="c-warn">Cassant</td><td>Utiliser <code>bg.init()</code> avec un thème plutôt que modifier la liste</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Alias de rétrocompatibilité</h3>
+      <div class="pre-wrap"><pre><span class="cm"># Scénario : renommer "couleur" en "couleur_barre"</span>
+<span class="kw">def</span> <span class="fn">barres</span>(..., couleur_barre=<span class="kw">None</span>, couleur=<span class="kw">None</span>, ...):
+    <span class="cm"># Si l'ancien nom est passé, l'utiliser en priorité</span>
+    couleur_barre = couleur_barre <span class="kw">or</span> couleur</pre></div>
+
+      <h3>Lancer et lire les tests</h3>
+      <div class="pre-wrap"><pre><span class="cm"># Tous les tests, mode verbeux</span>
+py -3.11 -m pytest tests/ -v
+
+<span class="cm"># Arrêter au premier échec (pratique pour déboguer)</span>
+py -3.11 -m pytest tests/ -v -x
+
+<span class="cm"># Exemple de sortie</span>
+PASSED tests/test_barres.py::test_smoke                  <span class="cm"># ✓</span>
+FAILED tests/test_barres.py::test_background_transparent <span class="cm"># ✗</span>
+<span class="cm">AssertionError: assert fig.patch.get_alpha() == 0</span>
+<span class="cm"># → la condition qui a échoué — commence par lire ça</span></pre></div>
+
+      <h3>Workflow git minimal</h3>
+      <div class="pre-wrap"><pre><span class="cm"># Voir ce qui a changé</span>
+git status
+git diff src/beau_graphique/beau_graphique.py
+
+<span class="cm"># Ajouter précisément les fichiers modifiés</span>
+git add src/beau_graphique/beau_graphique.py
+git add tests/test_mon_graphique.py
+
+<span class="cm"># Messages conventionnels (feat/fix/refactor)</span>
+git commit -m <span class="str">"feat: ajouter mon_graphique"</span>
+git commit -m <span class="str">"fix: PALETTE index hors-limites dans slope"</span>
+git commit -m <span class="str">"refactor: thème dynamique dans narratif"</span></pre></div>
+    </section>
+
+    <!-- ══ 06 ══════════════════════════════════════════════════════════ -->
+    <section id="nouveautes">
+      <span class="eyebrow">06 — Changelog</span>
+      <h2>Nouvelles fonctions</h2>
+
+      <p>Ce journal recense les fonctions ajoutées depuis la création de la librairie, avec leur philosophie et leurs paramètres clés.</p>
+
+      <h3 style="margin-top:2rem">beau_graphique.py</h3>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <strong>tendances_comparatives(items, ncols, …)</strong>
+        <p style="margin:.5rem 0 .3rem">Graphiques d'investissements temporels style McKinsey. Plusieurs catégories partagent le <em>même axe y</em>. L'année intermédiaire est un <strong>point de convergence</strong> (cercle ouvert) — pas une barre rectangulaire. Les polygones à 5 sommets reviennent à y=0 aux deux extrémités.</p>
+        <pre><code><span class="kw">items</span> = [
+  {<span class="str">"nom"</span>: <span class="str">"IA"</span>, <span class="str">"valeurs"</span>: [95, 79, 117],
+   <span class="str">"deltas"</span>: [-17, 48], <span class="str">"cumul"</span>: 22, <span class="str">"couleur"</span>: <span class="str">"#1B2A8A"</span>},
+  …
+]
+fig, axes = bg.tendances_comparatives(
+    items, ncols=<span class="num">4</span>,
+    titre=<span class="str">"Tech investment 2022–2024"</span>,
+    sous_titre=<span class="str">"Equity, Mds USD"</span>,
+)</code></pre>
+        <div class="bug-row" style="margin-top:.5rem"><span class="bug-k">vs tendances_grille</span><span class="bug-v"><code>tendances_grille</code> = mini-charts indépendants, axes séparés. <code>tendances_comparatives</code> = axes partagés par rangée, style McKinsey exact.</span></div>
+      </div>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <strong>slide(elements, nrows, ncols, …)</strong>
+        <p style="margin:.5rem 0 .3rem">Mise en page libre — remplace <code>dashboard()</code> dans une philosophie <em>texte-first</em>. On définit d'abord le discours (titres, paragraphes, callouts, métriques), puis les graphiques viennent illustrer. Chaque élément est placé dans une grille via <code>"pos": (row, col, rspan, cspan)</code>.</p>
+        <pre><code>fig, axes = bg.slide([
+  {<span class="str">"pos"</span>: (<span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">4</span>), <span class="str">"type"</span>: <span class="str">"titre"</span>,
+   <span class="str">"texte"</span>: <span class="str">"L'EMEA accélère au T3"</span>},
+  {<span class="str">"pos"</span>: (<span class="num">1</span>, <span class="num">0</span>), <span class="str">"type"</span>: <span class="str">"kpi"</span>, <span class="str">"valeur"</span>: <span class="str">"+18%"</span>,
+   <span class="str">"label"</span>: <span class="str">"Croissance"</span>, <span class="str">"delta"</span>: <span class="str">"vs +11% attendu"</span>,
+   <span class="str">"positif"</span>: <span class="kw">True</span>, <span class="str">"couleur"</span>: <span class="str">"#2DC653"</span>},
+  {<span class="str">"pos"</span>: (<span class="num">1</span>, <span class="num">1</span>), <span class="str">"type"</span>: <span class="str">"callout"</span>, <span class="str">"couleur"</span>: <span class="str">"#F3722C"</span>,
+   <span class="str">"texte"</span>: <span class="str">"L'Allemagne franchit 100 M€ pour la 1ère fois."</span>},
+  {<span class="str">"pos"</span>: (<span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">2</span>), <span class="str">"type"</span>: <span class="str">"graphique"</span>,
+   <span class="str">"fn"</span>: bg.barres, <span class="str">"kwargs"</span>: {<span class="str">"categories"</span>: …, <span class="str">"valeurs"</span>: …}},
+], nrows=<span class="num">3</span>, ncols=<span class="num">4</span>, figsize=(<span class="num">16</span>, <span class="num">9</span>))</code></pre>
+        <div class="bug-row" style="margin-top:.5rem"><span class="bug-k">Types</span><span class="bug-v"><code>titre</code> · <code>sous_titre</code> · <code>texte</code> · <code>callout</code> (fond teinté + barre colorée) · <code>kpi</code> · <code>graphique</code> · <code>vide</code></span></div>
+      </div>
+
+      <h3 style="margin-top:2rem">narratif.py</h3>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <strong>cascade(categories, valeurs, label_total, …)</strong>
+        <p style="margin:.5rem 0 .3rem">Waterfall / bridge chart. Décompose comment des contributions positives et négatives s'accumulent. Le premier élément = point de départ (absolu) ; les intermédiaires = deltas ; l'élément portant <code>label_total</code> = valeur finale. Barres vertes/rouges reliées par des lignes pointillées.</p>
+        <pre><code>n.cascade(
+  categories=[<span class="str">"Départ"</span>, <span class="str">"Nouveaux"</span>, <span class="str">"Churn"</span>, <span class="str">"Upsell"</span>, <span class="str">"Arrivée"</span>],
+  valeurs=[<span class="num">1200</span>, <span class="num">340</span>, <span class="num">-180</span>, <span class="num">90</span>, <span class="num">1450</span>],
+  label_total=<span class="str">"Arrivée"</span>,
+  titre=<span class="str">"MRR : +250 k€ ce trimestre"</span>,
+)</code></pre>
+      </div>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <strong>pente(categories, valeurs_avant, valeurs_apres, …)</strong>
+        <p style="margin:.5rem 0 .3rem">Slope chart — compare N entités entre deux périodes. Les <code>top_n</code> entités à variation absolue la plus forte reçoivent la couleur d'accent et une ligne épaisse ; les autres s'effacent. Flèches ▲/▼ colorées à droite.</p>
+        <pre><code>n.pente(
+  categories=[<span class="str">"France"</span>, <span class="str">"Espagne"</span>, <span class="str">"Italie"</span>],
+  valeurs_avant=[<span class="num">72</span>, <span class="num">61</span>, <span class="num">55</span>],
+  valeurs_apres=[<span class="num">78</span>, <span class="num">70</span>, <span class="num">52</span>],
+  label_avant=<span class="str">"2022"</span>, label_apres=<span class="str">"2024"</span>,
+  top_n=<span class="num">1</span>, accent=ACCENTS[<span class="str">"orange"</span>],
+)</code></pre>
+      </div>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <strong>nuage_annote(x, y, labels, tailles, focus, …)</strong>
+        <p style="margin:.5rem 0 .3rem">Scatter annoté avec bulles optionnelles et quadrants. Chaque point est étiqueté. Les points en <code>focus</code> reçoivent l'accent (gras, plein) ; les autres s'effacent (gris, semi-transparent). <code>quadrants=True</code> trace les médianes x/y avec des libellés de cadrant.</p>
+        <pre><code>n.nuage_annote(
+  x=[<span class="num">22</span>, <span class="num">45</span>, <span class="num">78</span>], y=[<span class="num">3.2</span>, <span class="num">1.8</span>, <span class="num">4.5</span>],
+  labels=[<span class="str">"A"</span>, <span class="str">"B"</span>, <span class="str">"C"</span>],
+  tailles=[<span class="num">100</span>, <span class="num">200</span>, <span class="num">500</span>], focus=<span class="num">2</span>,
+  quadrants=<span class="kw">True</span>,
+  quadrant_labels=(<span class="str">"Faible/Fort"</span>, <span class="str">"Fort/Fort"</span>,
+                   <span class="str">"Faible/Faible"</span>, <span class="str">"Fort/Faible"</span>),
+)</code></pre>
+      </div>
+
+    </section>
+
+    <!-- ══ 07 ══════════════════════════════════════════════════════════ -->
+    <section id="pieges">
+      <span class="eyebrow">07 — Maintenance</span>
+      <h2>Journal des pièges</h2>
+
+      <p>Ces cinq bugs ont été détectés et corrigés durant le développement de beau_graphique. Comprendre leur cause racine te permettra de les repérer avant qu'ils ne se reproduisent.</p>
+
+      <div class="bug">
+        <div class="bug-head">
+          <span class="bug-tag">Bug 01</span>
+          <span class="bug-title">PALETTE[n] — IndexError avec une palette courte</span>
+        </div>
+        <div class="bug-body">
+          <div class="bug-row"><span class="bug-k">Symptôme</span><span class="bug-v"><code>IndexError: list index out of range</code> dans <code>slope()</code> à la ligne <code>couleur_hausse = PALETTE[6]</code>.</span></div>
+          <div class="bug-row"><span class="bug-k">Cause</span><span class="bug-v">L'utilisateur avait remplacé PALETTE par une liste de 4 couleurs Orange. L'index 6 n'existe plus dans une liste de longueur 4.</span></div>
+          <div class="bug-row"><span class="bug-k">Fix</span><span class="bug-v">Utiliser le modulo : <code>PALETTE[n % len(PALETTE)]</code>. Pour des couleurs sémantiques (hausse/baisse), utiliser <code>_COULEUR_HAUT</code> / <code>_COULEUR_BAS</code> à la place de tout index.</span></div>
+          <div class="bug-row"><span class="bug-k">Détecter</span><span class="bug-v">Chercher <code>PALETTE[</code> dans le code source. Chaque occurrence sans modulo est un risque latent.</span></div>
+        </div>
+      </div>
+
+      <div class="bug">
+        <div class="bug-head">
+          <span class="bug-tag">Bug 02</span>
+          <span class="bug-title">Couleurs hardcodées — le thème est ignoré</span>
+        </div>
+        <div class="bug-body">
+          <div class="bug-row"><span class="bug-k">Symptôme</span><span class="bug-v">En thème dark, certains éléments restent en gris clair ou fond blanc — graphique illisible sur fond sombre.</span></div>
+          <div class="bug-row"><span class="bug-k">Cause</span><span class="bug-v">Des fonctions (<code>heatmap</code>, <code>waterfall</code>, <code>_dessiner_kpi</code>) avaient des hex en dur dans leur corps : <code>color="white"</code>, <code>color="#6B6F85"</code>.</span></div>
+          <div class="bug-row"><span class="bug-k">Fix</span><span class="bug-v">Remplacer par les clés de thème : <code>_T["bg"]</code>, <code>_T["texte_dim"]</code>, <code>_T["grille"]</code>. Pour hausse/baisse : <code>_COULEUR_HAUT</code> / <code>_COULEUR_BAS</code>.</span></div>
+          <div class="bug-row"><span class="bug-k">Détecter</span><span class="bug-v">Chercher les chaînes de forme <code>#XXXXXX</code> dans les corps de fonctions (pas dans les constantes du haut du fichier).</span></div>
+        </div>
+      </div>
+
+      <div class="bug">
+        <div class="bug-head">
+          <span class="bug-tag">Bug 03</span>
+          <span class="bug-title">transform mixte — labels hors zone + tight_layout cassé</span>
+        </div>
+        <div class="bug-body">
+          <div class="bug-row"><span class="bug-k">Symptôme</span><span class="bug-v">Labels du <code>bullet_chart</code> apparaissant très à gauche, hors du graphique visible. Warning <code>tight_layout : falling back to Agg renderer</code>.</span></div>
+          <div class="bug-row"><span class="bug-k">Cause</span><span class="bug-v"><code>transform=ax.get_yaxis_transform()</code> crée un système mixte (x en fraction d'axes, y en données). Matplotlib ne peut pas calculer les marges pour des éléments placés en dehors de l'espace connu des axes.</span></div>
+          <div class="bug-row"><span class="bug-k">Fix</span><span class="bug-v">Placer le texte en coordonnées de données et étendre <code>xlim</code> pour créer la zone gauche :<br><code>ax.text(-xmax * 0.02, 0, label, ha="right")</code><br><code>ax.set_xlim(-xmax * 0.32, xmax * 1.05)</code></span></div>
+          <div class="bug-row"><span class="bug-k">Détecter</span><span class="bug-v">Warning <code>tight_layout</code> lors du rendu, ou labels invisibles sur un graphique multi-axes.</span></div>
+        </div>
+      </div>
+
+      <div class="bug">
+        <div class="bug-head">
+          <span class="bug-tag">Bug 04</span>
+          <span class="bug-title">narratif.py — thème ignoré après bg.init()</span>
+        </div>
+        <div class="bug-body">
+          <div class="bug-row"><span class="bug-k">Symptôme</span><span class="bug-v">Après <code>bg.init(theme="dark")</code>, les fonctions de <code>narratif</code> continuaient à dessiner sur fond blanc.</span></div>
+          <div class="bug-row"><span class="bug-k">Cause</span><span class="bug-v"><code>narratif.py</code> avait des constantes au niveau module : <code>BG = "#F7F8FC"</code>. Elles étaient figées au chargement du module, avant tout appel à <code>bg.init()</code>.</span></div>
+          <div class="bug-row"><span class="bug-k">Fix</span><span class="bug-v">Supprimer toutes les constantes couleur. Ajouter <code>_t()</code> qui fait <code>import beau_graphique as _bg; return _bg._T</code> et l'appeler en début de chaque fonction narratif.</span></div>
+          <div class="bug-row"><span class="bug-k">Détecter</span><span class="bug-v">Chercher les constantes couleur au niveau module dans tout fichier qui n'est pas <code>beau_graphique.py</code>. Si elles ne viennent pas de <code>_T</code>, elles ne suivront pas le thème.</span></div>
+        </div>
+      </div>
+
+      <div class="bug">
+        <div class="bug-head">
+          <span class="bug-tag">Bug 05</span>
+          <span class="bug-title">Multi-axes — background ignoré sur les sous-graphiques</span>
+        </div>
+        <div class="bug-body">
+          <div class="bug-row"><span class="bug-k">Symptôme</span><span class="bug-v">La figure globale de <code>facet()</code> avait le bon fond, mais chaque sous-graphique restait blanc.</span></div>
+          <div class="bug-row"><span class="bug-k">Cause</span><span class="bug-v"><code>_appliquer_background</code> n'était appelé qu'une fois sur la figure. Les axes créés par <code>fig.add_subplot()</code> ne reçoivent pas automatiquement le fond de la figure.</span></div>
+          <div class="bug-row"><span class="bug-k">Fix</span><span class="bug-v">Appeler <code>_appliquer_background(fig, None, background)</code> une fois pour la figure, puis <code>_appliquer_background(fig, ax_i, background)</code> dans la boucle de création de chaque axe.</span></div>
+          <div class="bug-row"><span class="bug-k">Détecter</span><span class="bug-v">Toute fonction qui crée des axes avec <code>add_subplot()</code> ou <code>gs[i, j]</code> doit propager background sur chaque axe.</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  const sections = document.querySelectorAll("section[id]");
+  const links = document.querySelectorAll(".nav-link");
+
+  const activate = (id) => {
+    links.forEach((l) => {
+      l.classList.toggle("active", l.getAttribute("href") === "#" + id);
+    });
+  };
+
+  if (sections.length) activate(sections[0].id);
+
+  const obs = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) activate(e.target.id); });
+    },
+    { threshold: 0.25, rootMargin: "-5% 0px -55% 0px" }
+  );
+
+  sections.forEach((s) => obs.observe(s));
+})();
+</script>
