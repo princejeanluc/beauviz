@@ -6,20 +6,26 @@ Librairie matplotlib orientée **communication visuelle** — graphiques impacta
 beau_viz/
 ├── pyproject.toml
 ├── src/beau_graphique/
-│   ├── beau_graphique.py        # graphiques de base + McKinsey + layout (slide, layout_rapport)
-│   ├── beau_graphique.mplstyle  # style global matplotlib
-│   ├── narratif.py              # hiérarchie visuelle & annotations
-│   ├── pipeline.py              # intégration DataFrame (optionnel)
-│   ├── themes.py                # thèmes, palettes, daltonisme-safe
-│   └── export.py                # sauvegarde PNG/PDF, export batch
+│   ├── beau_graphique.py           # socle : graphiques de base (ligne, barres, aire, ...)
+│   ├── beau_graphique_mckinsey.py  # graphiques McKinsey (dot_plot_comparatif, bulle_4d, ...)
+│   ├── beau_graphique_layout.py    # mise en page (slide, layout_rapport)
+│   ├── beau_graphique.mplstyle     # style global matplotlib
+│   ├── narratif.py                 # hiérarchie visuelle & annotations
+│   ├── pipeline.py                 # intégration DataFrame (optionnel)
+│   ├── themes.py                   # thèmes, palettes, daltonisme-safe
+│   └── export.py                   # sauvegarde PNG/PDF, export batch
 └── tests/
 ```
 
-Les 4 modules (`beau_graphique`, `narratif`, `pipeline`, `themes`) sont des
-fichiers **à plat**, sans imports relatifs entre eux (`import beau_graphique as bg`,
-jamais `from .beau_graphique import ...`). Ça permet d'utiliser indifféremment
-l'un des deux modes d'installation ci-dessous — le code applicatif (`from
-beau_graphique import ligne`) est identique dans les deux cas.
+Tous les modules sont des fichiers **à plat**, sans imports relatifs entre
+eux (`import beau_graphique as bg`, jamais `from .beau_graphique import
+...`). `beau_graphique_mckinsey.py` et `beau_graphique_layout.py` importent
+le socle via `import beau_graphique as bg` et sont ré-importés à la fin de
+`beau_graphique.py` — `from beau_graphique import dot_plot_comparatif`
+fonctionne exactement comme si tout vivait dans un seul fichier. Ça permet
+d'utiliser indifféremment l'un des deux modes d'installation ci-dessous — le
+code applicatif (`from beau_graphique import ligne`) est identique dans les
+deux cas.
 
 ---
 

@@ -26,11 +26,14 @@ beau_viz/
 ├── galerie.ipynb             # démo exécutable de tous les modules
 ├── demo_mckinsey.py          # génère une figure par fonction McKinsey
 ├── src/beau_graphique/
-│   ├── beau_graphique.py     # module principal — graphiques de base + McKinsey + Phase 2
+│   ├── beau_graphique.py           # socle — graphiques de base (ligne, barres, aire, ...)
+│   ├── beau_graphique_mckinsey.py  # graphiques McKinsey (dot_plot_comparatif, bulle_4d, ...)
+│   ├── beau_graphique_layout.py    # mise en page (slide, layout_rapport)
 │   ├── beau_graphique.mplstyle
 │   ├── narratif.py           # graphiques narratifs — hiérarchie visuelle
 │   ├── pipeline.py           # intégration DataFrame optionnelle + formatage dates
-│   └── themes.py             # thèmes, palettes, daltonisme-safe
+│   ├── themes.py             # thèmes, palettes, daltonisme-safe
+│   └── export.py             # PNG/PDF, export batch
 └── tests/
     ├── test_mckinsey.py
     └── test_phase2.py
@@ -38,7 +41,9 @@ beau_viz/
 
 **Règle d'architecture fondamentale** : les modules sont indépendants et optionnels. On peut utiliser `beau_graphique.py` seul, ou l'enrichir avec les autres. Aucun module ne force un import obligatoire d'un autre — les imports croisés se font en `try/except` ou en import local dans la fonction.
 
-**Double mode d'installation (restructuration)** : les fichiers vivent dans `src/beau_graphique/` mais restent des modules **à plat**, sans aucun import relatif entre eux (`import beau_graphique as bg`, jamais `from . import beau_graphique`). `pyproject.toml` déclare `py-modules = ["beau_graphique", "narratif", "pipeline", "themes"]` avec `package-dir = {"" = "src/beau_graphique"}` — ça installe 4 modules top-level (pas un sous-paquet `beau_graphique.narratif`). Conséquence : les mêmes fichiers, copiés tels quels dans un dossier de travail (mode 1, zéro outillage) ou installés via `pip install -e .` (mode 2), s'utilisent avec exactement les mêmes imports (`from narratif import barres_focus`). Aucun bootstrap, aucun `sys.path.insert`, aucune branche `try/except ImportError` n'a été nécessaire pour ça — c'est la convention d'imports déjà en place (cross-imports en `import X as x` plats) qui rend les deux modes gratuits. Le seul compromis : `beau_graphique.mplstyle` n'est pas embarqué par le mode package (pas de `package_data` possible sans vrai sous-paquet) — `init()` retombe sur son fallback `rcParams` existant, qui couvrait déjà ce cas.
+**Double mode d'installation (restructuration)** : les fichiers vivent dans `src/beau_graphique/` mais restent des modules **à plat**, sans aucun import relatif entre eux (`import beau_graphique as bg`, jamais `from . import beau_graphique`). `pyproject.toml` déclare `py-modules = [...]` (7 modules, voir le fichier) avec `package-dir = {"" = "src/beau_graphique"}` — ça installe des modules top-level (pas un sous-paquet `beau_graphique.narratif`). Conséquence : les mêmes fichiers, copiés tels quels dans un dossier de travail (mode 1, zéro outillage) ou installés via `pip install -e .` (mode 2), s'utilisent avec exactement les mêmes imports (`from narratif import barres_focus`). Aucun bootstrap, aucun `sys.path.insert`, aucune branche `try/except ImportError` n'a été nécessaire pour ça — c'est la convention d'imports déjà en place (cross-imports en `import X as x` plats) qui rend les deux modes gratuits. Le seul compromis : `beau_graphique.mplstyle` n'est pas embarqué par le mode package (pas de `package_data` possible sans vrai sous-paquet) — `init()` retombe sur son fallback `rcParams` existant, qui couvrait déjà ce cas.
+
+**Split de `beau_graphique.py` (2026-08-07)** : le fichier avait grossi à 3239 lignes / 43 fonctions, seuil jugé ingérable. Les fonctions McKinsey (`dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `tendances_grille`, `tendances_comparatives`, `bump`, `radar`, `ridgeline`) sont parties dans `beau_graphique_mckinsey.py`, et la mise en page (`slide`, `layout_rapport`) dans `beau_graphique_layout.py`. Les deux nouveaux fichiers font `import beau_graphique as bg` pour lire `PALETTE`/`_T` à chaud (jamais `from beau_graphique import PALETTE`, qui figerait une copie obsolète après un `themes.appliquer()`). `beau_graphique.py` les réimporte à sa toute fin (après ses propres définitions, pour que l'import circulaire reste sûr) — `from beau_graphique import dot_plot_comparatif` continue de fonctionner à l'identique. Les fonctions listées ci-dessous restent groupées par thème (socle / McKinsey / layout) dans ce document même si leur fichier a changé — voir le nom de fichier entre parenthèses dans chaque en-tête de sous-section.
 
 ---
 
@@ -356,7 +361,9 @@ que 12 commits s'accumulaient en local, découvert seulement au moment du
 beau_viz/
 ├── pyproject.toml            # packaging pip install -e . — fait
 ├── src/beau_graphique/
-│   ├── beau_graphique.py     # graphiques de base + McKinsey — stable
+│   ├── beau_graphique.py           # socle — stable
+│   ├── beau_graphique_mckinsey.py  # McKinsey — stable
+│   ├── beau_graphique_layout.py    # mise en page — stable
 │   ├── beau_graphique.mplstyle
 │   ├── narratif.py           # hiérarchie visuelle + barres_connectees — stable
 │   ├── pipeline.py           # DataFrame — stable
