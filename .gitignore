@@ -22,6 +22,9 @@ env/
 
 # Outputs de démo
 demo_mckinsey_output/
+exports_demo/
+exports_workflow/
+/*.svg
 
 # Pytest / coverage
 .pytest_cache/
