@@ -315,7 +315,9 @@ Aucune graine aléatoire n'est fixée pour les fonctions qui utilisent `np.rando
 
 **Tests automatisés — partiellement RÉSOLU**  
 `tests/test_mckinsey.py` couvre les 4 fonctions McKinsey (`dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `barres_connectees`) : retour `(fig, ax)`, paramètres vides, compatibilité `themes.appliquer()`, cas limites (taille de bulle constante, mode ratio avec/sans `reference`).  
-`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. `test_ligne_dates_pandas` utilise `freq="ME"` (alias pandas ≥2.2) — un `pytest.mark.skipif` (2026-08-07) le passe automatiquement en skip sur un environnement pandas <2.2 au lieu de rester rouge en permanence. Suite complète : 99/99 (environnement courant : pandas 2.2.3).  
+`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. `test_ligne_dates_pandas` utilise `freq="ME"` (alias pandas ≥2.2) — un `pytest.mark.skipif` (2026-08-07) le passe automatiquement en skip sur un environnement pandas <2.2 au lieu de rester rouge en permanence.  
+`tests/test_geometrie.py` (2026-08-07) comble un angle mort : la quasi-totalité des tests précédents ne vérifiait que `(fig, ax)` / absence de crash, pas la géométrie réelle — un bug comme l'ancien "plateau plat" de `_dessiner_tendance_cat` (voir plus bas) serait resté invisible pour la suite. Il inspecte les coordonnées réelles des artistes matplotlib : `Polygon.get_xy()` a exactement 5 sommets distincts pour `tendances_comparatives()` (avec les bonnes valeurs Y, pas un plateau), la géométrie plate-mais-voulue de `tendances_grille()` (barres à sommet plat + pentes, différente et correcte), la continuité cumulative des `Rectangle` de `waterfall()`, les positions Y avant/après de `dot_plot_comparatif()`, et l'ordre (non trié) des tailles de bulles de `bulle_4d()`.  
+Suite complète : 104/104 (environnement courant : pandas 2.2.3).  
 **Reste à faire** : `tests/test_basique.py` (smoke tests des 8 fonctions de base de `beau_graphique.py` + `narratif.py` historique) et `tests/test_pipeline.py` (wrappers `_df`, `depuis_df()`) n'existent pas encore.
 
 **Documentation interactive — RÉSOLU**  
@@ -374,6 +376,8 @@ beau_viz/
 │   ├── test_phase2.py        # dates, box_plot/violin/waterfall/lollipop/slope/facet — fait
 │   ├── test_export.py, test_layout.py, test_nouveaux_charts.py,
 │   │   test_barres_empilees_et_narratif.py  # fait
+│   ├── test_geometrie.py     # assertions sur coordonnées réelles (Polygon,
+│   │   Rectangle, scatter) — pas seulement (fig, ax) — fait
 │   ├── test_basique.py       # smoke tests des fonctions de base — à créer
 │   └── test_pipeline.py      # tests DataFrame — à créer
 ├── galerie.ipynb              # démo visuelle complète — fait
