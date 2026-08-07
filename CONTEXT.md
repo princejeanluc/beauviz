@@ -310,7 +310,7 @@ Aucune graine aléatoire n'est fixée pour les fonctions qui utilisent `np.rando
 
 **Tests automatisés — partiellement RÉSOLU**  
 `tests/test_mckinsey.py` couvre les 4 fonctions McKinsey (`dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `barres_connectees`) : retour `(fig, ax)`, paramètres vides, compatibilité `themes.appliquer()`, cas limites (taille de bulle constante, mode ratio avec/sans `reference`).  
-`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. 10/11 passent ; le test `test_ligne_dates_pandas` échoue dans cet environnement car il utilise `freq="ME"` (alias pandas ≥2.2) alors que l'environnement local a pandas 2.1.3 — c'est une limitation d'environnement, pas un défaut du code (le test est repris verbatim, ne pas le modifier pour le faire passer artificiellement).  
+`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. `test_ligne_dates_pandas` utilise `freq="ME"` (alias pandas ≥2.2) — un `pytest.mark.skipif` (2026-08-07) le passe automatiquement en skip sur un environnement pandas <2.2 au lieu de rester rouge en permanence. Suite complète : 99/99 (environnement courant : pandas 2.2.3).  
 **Reste à faire** : `tests/test_basique.py` (smoke tests des 8 fonctions de base de `beau_graphique.py` + `narratif.py` historique) et `tests/test_pipeline.py` (wrappers `_df`, `depuis_df()`) n'existent pas encore.
 
 **Documentation interactive — RÉSOLU**  
@@ -331,6 +331,23 @@ Les messages d'erreur et de `inspecter()` sont en français. Si le projet est pa
 6. Tester avec un DataFrame minimal pandas avant de livrer
 7. Mettre à jour `README.md` à chaque ajout de fonction publique
 
+### Workflow git — à respecter à chaque session
+
+Il n'y a pas de CI : rien n'empêche `main` local et `origin/main` de diverger
+silencieusement si cette routine n'est pas suivie. C'est exactement ce qui
+s'est produit le 2026-08-07 — une branche mergée via PR sur GitHub pendant
+que 12 commits s'accumulaient en local, découvert seulement au moment du
+`git push`.
+
+1. **En début de session** : `git fetch origin` puis vérifier `git log
+   HEAD..origin/main --oneline` — si non vide, `git merge origin/main` avant
+   de commencer à travailler.
+2. **Avant chaque commit** : lancer `python -m pytest tests/ -q` — décision
+   assumée de ne pas mettre en place de CI pour l'instant, donc rien
+   n'exécute les tests à votre place.
+3. **En fin de session** : `git push origin main` — ne pas laisser de
+   commits locaux non poussés d'une session à l'autre.
+
 ---
 
 ## 10. Structure cible du projet à terme
@@ -344,10 +361,12 @@ beau_viz/
 │   ├── narratif.py           # hiérarchie visuelle + barres_connectees — stable
 │   ├── pipeline.py           # DataFrame — stable
 │   ├── themes.py             # thèmes — stable
-│   └── export.py             # PDF, HTML, batch — à créer
+│   └── export.py             # PNG/PDF/batch — fait
 ├── tests/
 │   ├── test_mckinsey.py      # fait
 │   ├── test_phase2.py        # dates, box_plot/violin/waterfall/lollipop/slope/facet — fait
+│   ├── test_export.py, test_layout.py, test_nouveaux_charts.py,
+│   │   test_barres_empilees_et_narratif.py  # fait
 │   ├── test_basique.py       # smoke tests des fonctions de base — à créer
 │   └── test_pipeline.py      # tests DataFrame — à créer
 ├── galerie.ipynb              # démo visuelle complète — fait

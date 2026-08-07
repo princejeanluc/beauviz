@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "beau-graphique"
-version = "0.1.0"
+version = "0.2.0"
 description = "Wrapper matplotlib en français pour des graphiques soignés, prêts pour la présentation"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -23,6 +23,8 @@ def test_ligne_dates_pandas():
         import pandas as pd
     except ImportError:
         pytest.skip("pandas non installé")
+    if tuple(int(p) for p in pd.__version__.split(".")[:2]) < (2, 2):
+        pytest.skip(f"freq='ME' nécessite pandas >=2.2 (installé : {pd.__version__})")
     from beau_graphique import ligne
     dates = list(pd.date_range("2022-01", periods=8, freq="ME"))
     fig, ax = ligne(x=dates, y_series={"B": list(range(8))})

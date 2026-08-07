@@ -51,17 +51,23 @@ Combien de variables numériques principales avez-vous ?
 │   │   ├─ 2 à 5 catégories seulement → camembert()
 │   │   └─ Plus de 5 catégories, ou comparaison de plusieurs ensembles → unit_chart(mode="proportion")
 │   │
-│   └─ Je veux DÉCOMPOSER une variation en contributions → waterfall()
+│   ├─ Je veux DÉCOMPOSER une variation en contributions → waterfall()
+│   │   └─ … avec un seul message à faire ressortir (gris/accent) → cascade()
+│   │
+│   └─ Je veux comparer plusieurs entités sur PLUSIEURS CRITÈRES qualitatifs
+│      à la fois (profil, pas une seule mesure) → radar()
 │
 ├─ 2 variables numériques
 │   ├─ Je veux montrer une RELATION/CORRÉLATION → nuage()
 │   ├─ Je veux comparer AVANT/APRÈS sur 1 seule catégorie → comparaison_avant_apres()
 │   ├─ Je veux comparer AVANT/APRÈS sur plusieurs catégories → slope()
+│   │   └─ … avec seulement les plus fortes variations en accent → pente()
 │   ├─ Je veux comparer une valeur à un OBJECTIF → bullet_chart()
 │   ├─ Je veux montrer un ratio offre/demande → unit_chart(mode="ratio")
 │   └─ Deux échelles très différentes à superposer → ligne_double_axe() [à venir]
 │
 ├─ 3 variables numériques (X, Y, + taille OU couleur) → nuage(couleur_var=…) ou nuage(taille_var=…)
+│   └─ … avec chaque point étiqueté directement (pas de légende) → nuage_annote()
 │
 ├─ 4 variables numériques (X, Y, taille, couleur ordinale) → bulle_4d()
 │
@@ -75,11 +81,14 @@ Combien de variables numériques principales avez-vous ?
 ├─ Je veux comparer la même mesure entre plusieurs sous-groupes,
 │  un graphique par sous-groupe → facet()
 │
+├─ Je veux comparer la FORME de la distribution (densité) de plusieurs
+│  groupes empilés visuellement → ridgeline()
+│
 ├─ Une hiérarchie / structure imbriquée (parts dans des parts) → treemap() [à venir]
 │
 ├─ Une proportion sous forme d'icônes/carrés comptables → waffle() [à venir]
 │
-├─ Un classement qui évolue dans le temps (qui dépasse qui) → bump_chart() [à venir]
+├─ Un classement qui évolue dans le temps (qui dépasse qui) → bump()
 │
 └─ Une matrice (corrélation, confusion, pivot) → heatmap()
 ```
@@ -228,6 +237,18 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Erreurs courantes** : trop de bulles qui se superposent ; échelle de taille non perceptible (`taille_min`/`taille_max` trop proches).
 - **Voir aussi** : `nuage()`.
 
+### `nuage_annote()`
+
+- **En une phrase** : nuage de points où chaque entité est étiquetée directement sur le graphique, sans légende.
+- **Utiliser quand** : le nombre de points est petit (<30) et chacun a un nom qui doit apparaître à l'écran — positionnement d'entités, mapping stratégique.
+- **Ne pas utiliser quand** : trop de points pour que les étiquettes restent lisibles (préférez `nuage()` seul, sans labels) ou 4 dimensions sont nécessaires (préférez `bulle_4d()`).
+- **Nombre de variables** : 2 (+ 1 taille optionnelle) + labels.
+- **Nombre de catégories recommandé** : 5 à 25 points étiquetés.
+- **Données requises** : `x`, `y`, `labels` (listes alignées), `tailles` optionnel.
+- **Exemple minimal** : `nuage_annote(x=[22,45], y=[3.2,1.8], labels=["A","B"])`
+- **Erreurs courantes** : trop de points étiquetés qui se chevauchent ; `quadrants=True` sans `quadrant_labels` explicites (les cadrans restent muets).
+- **Voir aussi** : `nuage()`, `bulle_4d()`.
+
 ### `unit_chart()`
 
 - **En une phrase** : carrés de proportion (`mode="proportion"`) ou ratios offre/demande imbriqués (`mode="ratio"`) — alternative honnête au camembert.
@@ -288,6 +309,18 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Erreurs courantes** : contributions qui ne se cumulent pas réellement au total affiché ; oublier `total_debut`/`total_fin` et perdre le repère de départ/arrivée.
 - **Voir aussi** : `comparaison_avant_apres()`, `divergent()`.
 
+### `cascade()`
+
+- **En une phrase** : version narrative de `waterfall()` — même décomposition en contributions cumulées, mais avec le total en couleur neutre et les contributions clairement vert/rouge selon le signe.
+- **Utiliser quand** : le public doit distinguer immédiatement les facteurs qui aident de ceux qui pénalisent, sans lire chaque étiquette.
+- **Ne pas utiliser quand** : les valeurs n'ont pas de signe naturel positif/négatif (préférez `waterfall()` avec des couleurs neutres).
+- **Nombre de variables** : 1 valeur × N contributions signées.
+- **Nombre de catégories recommandé** : 3 à 8 contributions.
+- **Données requises** : `categories`, `valeurs` (premier = départ absolu, dernier = `label_total` = arrivée absolue).
+- **Exemple minimal** : `cascade(categories=["Départ","Churn","Arrivée"], valeurs=[1200,-180,1450], label_total="Arrivée")`
+- **Erreurs courantes** : oublier que l'élément `label_total` doit contenir la valeur absolue d'arrivée, pas un delta.
+- **Voir aussi** : `waterfall()`.
+
 ### `lollipop()`
 
 - **En une phrase** : tige + point pour classer des catégories, plus aéré qu'une barre pleine.
@@ -311,6 +344,54 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Exemple minimal** : `slope(categories=["A","B"], valeurs_gauche=[10,20], valeurs_droite=[15,18])`
 - **Erreurs courantes** : ne pas utiliser `focus` quand seules 1-2 catégories sont le vrai sujet, laissant toutes les lignes se battre pour l'attention.
 - **Voir aussi** : `comparaison_avant_apres()`, `dot_plot_comparatif()`, `barres_connectees()`.
+
+### `pente()`
+
+- **En une phrase** : version narrative de `slope()` — seules les `top_n` entités à plus forte variation absolue reçoivent l'accent, le reste passe en gris.
+- **Utiliser quand** : parmi de nombreuses catégories entre deux périodes, seules 1 à 3 méritent vraiment l'attention du lecteur.
+- **Ne pas utiliser quand** : toutes les catégories sont d'intérêt égal (préférez `slope()` sans hiérarchisation).
+- **Nombre de variables** : 1 catégorie × 2 périodes.
+- **Nombre de catégories recommandé** : 3 à 15, avec `top_n` = 1 à 3.
+- **Données requises** : `categories`, `valeurs_avant`, `valeurs_apres`.
+- **Exemple minimal** : `pente(categories=["A","B","C"], valeurs_avant=[10,20,15], valeurs_apres=[15,18,15], top_n=1)`
+- **Erreurs courantes** : `top_n` trop grand (dilue l'effet de hiérarchie, revient à `slope()`).
+- **Voir aussi** : `slope()`, `comparaison_avant_apres()`.
+
+### `bump()`
+
+- **En une phrase** : classement (rang) de plusieurs entités qui évolue entre périodes, lignes lissées, rang 1 en haut.
+- **Utiliser quand** : le message est « qui dépasse qui » dans un classement suivi dans le temps (parts de marché, ligues, popularité).
+- **Ne pas utiliser quand** : la valeur absolue compte autant que le rang (préférez `ligne()` ou `barres_connectees()`).
+- **Nombre de variables** : 1 rang entier × N périodes, par entité.
+- **Nombre de catégories recommandé** : 3 à 8 entités, 3 à 8 périodes.
+- **Données requises** : `periodes`, `series` (dict `{"nom": [rangs...]}`).
+- **Exemple minimal** : `bump(periodes=["2022","2023"], series={"A":[1,2],"B":[2,1]})`
+- **Erreurs courantes** : mélanger rangs et valeurs brutes dans `series` (les rangs doivent être des entiers 1..N).
+- **Voir aussi** : `ligne()`, `barres_connectees()`.
+
+### `radar()`
+
+- **En une phrase** : profil multi-critères d'une ou plusieurs entités sur des axes disposés en étoile.
+- **Utiliser quand** : vous comparez 2 à 5 entités sur 3 à 10 critères qualitatifs ou quantitatifs de même échelle (compétences, scores, notation).
+- **Ne pas utiliser quand** : plus de 5 entités superposées (les polygones se chevauchent trop) ou les critères n'ont pas la même échelle — préférez `dot_plot_comparatif()` ou `bulle_4d()`.
+- **Nombre de variables** : N critères × 1 à 5 entités.
+- **Nombre de catégories recommandé** : 3 à 10 critères, 1 à 5 entités.
+- **Données requises** : `categories` (critères), `series` (dict `{"nom": [val_par_critère]}`).
+- **Exemple minimal** : `radar(categories=["Vitesse","Force"], series={"A":[8,7]})`
+- **Erreurs courantes** : critères sur des échelles différentes sans normalisation préalable (fausse l'aire des polygones).
+- **Voir aussi** : `dot_plot_comparatif()`.
+
+### `ridgeline()`
+
+- **En une phrase** : distributions de plusieurs groupes superposées et décalées verticalement (Joy Plot), pour comparer leur forme d'un coup d'œil.
+- **Utiliser quand** : vous comparez la forme (bimodalité, asymétrie) de 3 à 10 groupes avec suffisamment de points chacun (≥20).
+- **Ne pas utiliser quand** : moins de 3 groupes (préférez `violin()` ou `box_plot()`) ou peu de points par groupe (la densité estimée devient trompeuse).
+- **Nombre de variables** : 1 mesure × N groupes.
+- **Nombre de catégories recommandé** : 3 à 10 groupes.
+- **Données requises** : `series` (dict `{"nom": [valeurs brutes...]}`), premier groupe affiché en haut.
+- **Exemple minimal** : `ridgeline(series={"A": donnees_a, "B": donnees_b})`
+- **Erreurs courantes** : `chevauchement` trop élevé qui masque des groupes derrière d'autres.
+- **Voir aussi** : `violin()`, `box_plot()`.
 
 ### `facet()`
 
@@ -448,6 +529,9 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 | Comparaison entre sous-groupes, même mesure | Ce sous-groupe se comporte-t-il comme les autres ? | `facet()` | `barres_groupees()` si ≤4 groupes | Tout sur un seul graphique surchargé |
 | Matrice de valeurs (corrélation, pivot) | Où sont les zones fortes/faibles ? | `heatmap()` | `nuage()` par paire de variables | Tableau de chiffres seul |
 | Suivi temporel multi-entités avec variations | Qui progresse, de combien, à chaque étape ? | `barres_connectees()` | `slope()` si 2 périodes seulement | `barres_groupees()` dense |
+| Classement qui évolue dans le temps | Qui dépasse qui, à quel moment ? | `bump()` | `ligne()` si la valeur absolue compte | `barres_groupees()` par période |
+| Profil multi-critères d'entités | Comment ces entités se comparent-elles sur plusieurs axes ? | `radar()` | `dot_plot_comparatif()` | Tableau de scores brut |
+| Distribution de plusieurs groupes, comparaison de forme | Quelle est la forme de chaque distribution, les unes à côté des autres ? | `ridgeline()` | `violin()` | `histogramme()` superposés |
 
 ---
 
