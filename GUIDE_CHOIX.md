@@ -90,6 +90,9 @@ Combien de variables numériques principales avez-vous ?
 │
 ├─ Un classement qui évolue dans le temps (qui dépasse qui) → bump()
 │
+├─ Je veux montrer comment une quantité se répartit et circule à travers
+│  plusieurs étapes successives (budget, trafic, parcours) → flux()
+│
 └─ Une matrice (corrélation, confusion, pivot) → heatmap()
 ```
 
@@ -200,6 +203,18 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Exemple minimal** : `heatmap(df.corr().values, labels_lignes=cols, labels_colonnes=cols)`
 - **Erreurs courantes** : colormap arc-en-ciel non perceptuellement uniforme ; oublier d'annoter les valeurs sur de petites matrices où l'exactitude compte.
 - **Voir aussi** : `nuage()` (pour des relations brutes plutôt qu'agrégées).
+
+### `flux()`
+
+- **En une phrase** : diagramme de Sankey — montre comment une quantité se répartit et circule à travers plusieurs étapes successives.
+- **Utiliser quand** : vous décomposez un volume (budget, trafic, effectifs) en flux successifs entre étapes ordonnées (source → canal → résultat).
+- **Ne pas utiliser quand** : le graphe contient un cycle (A → B → A, non supporté) ; ou pour comparer des catégories indépendantes sans relation de flux (préférez `barres()`) ; ou pour décomposer une variation dans le temps sur une seule dimension (préférez `waterfall()`/`cascade()`).
+- **Nombre de variables** : 1 valeur par lien source→cible, N étapes.
+- **Nombre de catégories recommandé** : jusqu'à une dizaine de nœuds par colonne (au-delà, pas de minimisation de croisement — la lisibilité se dégrade).
+- **Données requises** : `liens` — liste de tuples `(source, cible, valeur)`. La colonne de chaque nœud est déduite automatiquement.
+- **Exemple minimal** : `flux([("Recherche","Site A",120), ("Site A","Achat",90), ("Site A","Abandon",30)])`
+- **Erreurs courantes** : créer un cycle involontaire en réutilisant un nom de nœud en aval comme s'il s'agissait d'une nouvelle étape ; trop de nœuds par colonne qui tassent les rubans.
+- **Voir aussi** : `waterfall()`/`cascade()` (décomposition sur un seul axe plutôt qu'un flux multi-étapes), `barres_connectees()` (suivi temporel plutôt que répartition).
 
 ### `dashboard()`
 
@@ -528,6 +543,7 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 | Valeurs signées (delta, NPS, solde) | Où est-ce positif, où est-ce négatif ? | `divergent()` | `waterfall()` si cumulatif | `barres()` sans repère zéro visible |
 | Comparaison entre sous-groupes, même mesure | Ce sous-groupe se comporte-t-il comme les autres ? | `facet()` | `barres_groupees()` si ≤4 groupes | Tout sur un seul graphique surchargé |
 | Matrice de valeurs (corrélation, pivot) | Où sont les zones fortes/faibles ? | `heatmap()` | `nuage()` par paire de variables | Tableau de chiffres seul |
+| Répartition d'un volume à travers plusieurs étapes | Comment ce volume se divise-t-il et circule-t-il ? | `flux()` | `barres_groupees()` empilées si 2 étapes seulement | Camembert par étape (perd la continuité) |
 | Suivi temporel multi-entités avec variations | Qui progresse, de combien, à chaque étape ? | `barres_connectees()` | `slope()` si 2 périodes seulement | `barres_groupees()` dense |
 | Classement qui évolue dans le temps | Qui dépasse qui, à quel moment ? | `bump()` | `ligne()` si la valeur absolue compte | `barres_groupees()` par période |
 | Profil multi-critères d'entités | Comment ces entités se comparent-elles sur plusieurs axes ? | `radar()` | `dot_plot_comparatif()` | Tableau de scores brut |

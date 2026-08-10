@@ -61,6 +61,16 @@ def _get_bg():
     return _BG_MODULE
 
 
+def _teinte_intermediaire(c1: str, c2: str, t: float) -> str:
+    """Mélange deux couleurs hex (t=0 -> c1, t=1 -> c2)."""
+    r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+    r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+    r = round(r1 + (r2 - r1) * t)
+    g = round(g1 + (g2 - g1) * t)
+    b = round(b1 + (b2 - b1) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Catalogue des thèmes
 # ══════════════════════════════════════════════════════════════════════════════
@@ -320,11 +330,25 @@ def appliquer(nom_theme: str, verbose: bool = True) -> dict:
             color=palette, linestyle=theme["linestyles"]
         )
 
-    # ── Mise à jour PALETTE dans beau_graphique ───────────────────────────────
+    # ── Mise à jour PALETTE + _T dans beau_graphique ──────────────────────────
+    # _T pilote fond/texte/grille pour dot_plot_comparatif, bump, radar, slide,
+    # layout_rapport, waterfall, box_plot, facet, dashboard, flux, et tout
+    # narratif.py (qui le lit dynamiquement via _t()/_bg._T) — sans ce patch,
+    # appliquer() changeait les couleurs de données (PALETTE) mais laissait le
+    # texte/fond de ces fonctions sur l'état du dernier bg.init(theme=...),
+    # avec un vrai risque de texte illisible (ex: texte sombre sur fond sombre).
     PALETTE_ACTIVE = list(palette)
     bg = _get_bg()
     if bg is not None:
         bg.PALETTE = list(palette)
+        bg._T = {
+            "bg":          fond,
+            "texte":       texte,
+            "texte_dim":   _teinte_intermediaire(texte, fond, 0.35),
+            "grille":      grille,
+            "fond_neutre": fond if mode == "sombre" else "#FFFFFF",
+            "serie_dim":   _teinte_intermediaire(texte, fond, 0.55),
+        }
 
     # ── Mise à jour couleurs dans narratif si disponible ─────────────────────
     try:

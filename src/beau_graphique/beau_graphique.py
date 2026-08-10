@@ -15,6 +15,7 @@ Chaque fonction retourne (fig, ax) prêt à être affiché ou sauvegardé.
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.path as mpath
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
 import numpy as np
@@ -1545,6 +1546,7 @@ def dashboard(configs: list, titre_global="", ncols=2,
         "barres_groupees": barres_groupees,
         "camembert": camembert,
         "heatmap": heatmap,
+        "flux": flux,
     }
 
     axes = []
@@ -1568,6 +1570,217 @@ def dashboard(configs: list, titre_global="", ncols=2,
         fig.suptitle(titre_global, fontsize=18, fontweight="bold",
                      color=_T["texte"], y=1.02)
     return fig, np.array(axes[:n])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Flux — diagramme de Sankey (rubans de Bézier, style maison)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _stade_noeuds(liens):
+    """Attribue à chaque nœud une colonne = plus long chemin depuis une
+    source (aucune configuration manuelle requise). Lève ValueError si le
+    graphe formé par *liens* contient un cycle (flux() exige un DAG)."""
+    predecesseurs = {}
+    for s, c, _ in liens:
+        predecesseurs.setdefault(s, [])
+        predecesseurs.setdefault(c, []).append(s)
+
+    cache, en_cours = {}, set()
+
+    def _profondeur(nom):
+        if nom in cache:
+            return cache[nom]
+        if nom in en_cours:
+            raise ValueError(
+                f"flux() : cycle détecté impliquant '{nom}' — seuls les "
+                f"graphes acycliques (DAG) sont supportés."
+            )
+        en_cours.add(nom)
+        preds = predecesseurs.get(nom, [])
+        profondeur = 0 if not preds else 1 + max(_profondeur(p) for p in preds)
+        en_cours.discard(nom)
+        cache[nom] = profondeur
+        return profondeur
+
+    return {nom: _profondeur(nom) for nom in predecesseurs}
+
+
+def flux(liens, noeuds=None,
+         titre="", sous_titre="", note="",
+         couleur_ruban="source", couleurs_noeuds=None,
+         alpha_ruban=0.55, fmt="{:.0f}",
+         figsize=None, format=None, background=None, ax=None):
+    """
+    Diagramme de flux (Sankey) — rubans de Bézier entre nœuds répartis en
+    colonnes, largeur proportionnelle à la valeur du flux.
+
+    Quand l'utiliser
+    ----------------
+    Montrer comment une quantité se répartit et circule à travers plusieurs
+    étapes successives (budget, trafic, parcours client, migration de parts
+    de marché).
+
+    Ne pas utiliser
+    ----------------
+    Si le graphe des flux contient un cycle (A → B → A) — non supporté, voir
+    plus bas. Au-delà d'une dizaine de nœuds par colonne, le diagramme
+    devient difficile à lire (aucune minimisation de croisement globale
+    n'est appliquée, seulement un tri local par colonne cible).
+
+    Parameters
+    ----------
+    liens          : liste de tuples ``(source, cible, valeur)``. La colonne
+                     de chaque nœud est déduite automatiquement (plus long
+                     chemin depuis une source) — aucun paramètre de layout
+                     manuel n'est nécessaire.
+    noeuds         : ordre vertical explicite (liste de noms) — optionnel,
+                     sinon ordre de première apparition dans *liens*.
+    couleur_ruban  : ``"source"`` (défaut) ou ``"cible"`` — le nœud dont la
+                     couleur détermine celle du ruban — ou une couleur hex
+                     fixe appliquée à tous les rubans.
+    couleurs_noeuds: dict ``{nom: couleur}`` — sinon couleurs de ``PALETTE``
+                     cyclées par ordre d'apparition (via ``_palette_pour``).
+    alpha_ruban    : transparence des rubans (0-1, défaut 0.55).
+    fmt            : format des valeurs affichées sous chaque nœud.
+
+    Returns
+    -------
+    (fig, ax)
+
+    Exemple
+    -------
+    >>> flux([
+    ...     ("Recherche", "Site A", 120), ("Pub", "Site A", 60),
+    ...     ("Site A", "Achat", 90), ("Site A", "Abandon", 90),
+    ... ], titre="Parcours d'acquisition")
+    """
+    if not liens:
+        raise ValueError("flux() : 'liens' est vide.")
+
+    liens = [(str(s), str(c), float(v)) for s, c, v in liens]
+    for s, c, v in liens:
+        if v <= 0:
+            raise ValueError(
+                f"flux() : la valeur du lien ('{s}', '{c}', {v}) doit être "
+                f"strictement positive."
+            )
+
+    stades = _stade_noeuds(liens)
+    noms_liens = list(dict.fromkeys([n for s, c, _ in liens for n in (s, c)]))
+
+    if noeuds is not None:
+        manquants = set(noms_liens) - set(noeuds)
+        if manquants:
+            raise ValueError(
+                f"flux() : {sorted(manquants)} référencé(s) dans 'liens' "
+                f"mais absent(s) de 'noeuds'."
+            )
+        noms = [n for n in noeuds if n in stades]
+    else:
+        noms = noms_liens
+
+    total_in  = {n: 0.0 for n in noms}
+    total_out = {n: 0.0 for n in noms}
+    for s, c, v in liens:
+        total_out[s] += v
+        total_in[c]  += v
+    valeur_noeud = {n: max(total_in[n], total_out[n]) for n in noms}
+
+    n_colonnes = max(stades.values()) + 1
+    colonnes = [[n for n in noms if stades[n] == i] for i in range(n_colonnes)]
+
+    max_total_col = max(sum(valeur_noeud[n] for n in col) for col in colonnes)
+    gap = max_total_col * 0.025
+
+    # ── Positions verticales (chaque colonne centrée sur la même échelle) ──
+    y_haut = {}
+    for col in colonnes:
+        hauteur_col = sum(valeur_noeud[n] for n in col) + gap * max(0, len(col) - 1)
+        y = (max_total_col - hauteur_col) / 2 + hauteur_col
+        for n in col:
+            y_haut[n] = y
+            y -= valeur_noeud[n] + gap
+
+    couleurs = dict(couleurs_noeuds or {})
+    a_colorier = [n for n in noms if n not in couleurs]
+    for n, c in zip(a_colorier, _palette_pour(a_colorier)):
+        couleurs[n] = c
+
+    fig, ax = _new_fig(figsize or (11, 6.5), ax=ax, format=format, background=background)
+
+    largeur_noeud = 0.16
+    espace_col = 1.0
+    x_col = {i: i * (largeur_noeud + espace_col) for i in range(n_colonnes)}
+
+    # ── Curseurs d'attache : répartissent les liens sur le bord d'un nœud,
+    # triés par colonne source puis position verticale de la cible (limite
+    # les croisements sans viser une minimisation globale) ─────────────────
+    curseur_sortie = {n: y_haut[n] for n in noms}
+    curseur_entree = {n: y_haut[n] for n in noms}
+    liens_tries = sorted(liens, key=lambda l: (stades[l[0]], -y_haut[l[1]]))
+
+    for s, c, v in liens_tries:
+        y0_haut = curseur_sortie[s]
+        y0_bas  = y0_haut - v
+        curseur_sortie[s] = y0_bas
+
+        y1_haut = curseur_entree[c]
+        y1_bas  = y1_haut - v
+        curseur_entree[c] = y1_bas
+
+        x0 = x_col[stades[s]] + largeur_noeud
+        x1 = x_col[stades[c]]
+        xm = (x0 + x1) / 2
+
+        verts = [
+            (x0, y0_haut), (xm, y0_haut), (xm, y1_haut), (x1, y1_haut),
+            (x1, y1_bas), (xm, y1_bas), (xm, y0_bas), (x0, y0_bas),
+            (x0, y0_haut),
+        ]
+        codes = [
+            mpath.Path.MOVETO,
+            mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+            mpath.Path.LINETO,
+            mpath.Path.CURVE4, mpath.Path.CURVE4, mpath.Path.CURVE4,
+            mpath.Path.CLOSEPOLY,
+        ]
+        if couleur_ruban == "source":
+            couleur = couleurs[s]
+        elif couleur_ruban == "cible":
+            couleur = couleurs[c]
+        else:
+            couleur = couleur_ruban
+        ax.add_patch(mpatches.PathPatch(
+            mpath.Path(verts, codes), facecolor=couleur,
+            edgecolor="none", alpha=alpha_ruban, zorder=2,
+        ))
+
+    # ── Nœuds ────────────────────────────────────────────────────────────
+    for n in noms:
+        x0 = x_col[stades[n]]
+        ax.add_patch(mpatches.Rectangle(
+            (x0, y_haut[n] - valeur_noeud[n]), largeur_noeud, valeur_noeud[n],
+            facecolor=couleurs[n], edgecolor="none", zorder=3,
+        ))
+        label = f"{n}\n{fmt.format(valeur_noeud[n])}"
+        derniere_colonne = stades[n] == n_colonnes - 1
+        x_texte = (x0 - 0.04) if derniere_colonne else (x0 + largeur_noeud + 0.04)
+        ax.text(x_texte, y_haut[n] - valeur_noeud[n] / 2, label,
+                ha=("right" if derniere_colonne else "left"), va="center",
+                fontsize=9, color=_T["texte"], linespacing=1.3, zorder=4)
+
+    ax.set_xlim(-0.3, x_col[n_colonnes - 1] + largeur_noeud + 0.3)
+    ax.set_ylim(0, max_total_col)
+    ax.axis("off")
+
+    if titre:
+        fig.text(0.02, 0.97, titre, fontsize=14, fontweight="bold", color=_T["texte"])
+    if sous_titre:
+        fig.text(0.02, 0.92, sous_titre, fontsize=9.5, color=_T["texte_dim"])
+    if note:
+        fig.text(0.02, 0.01, note, fontsize=7.5, color=_T["texte_dim"], style="italic")
+
+    return fig, ax
 
 
 # ══════════════════════════════════════════════════════════════════════════════

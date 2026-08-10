@@ -62,6 +62,7 @@ Fonctions publiques :
 - `camembert(labels, valeurs, ...)` — donut ou camembert plein
 - `heatmap(matrice, ...)` — matrice avec annotations et colormap
 - `dashboard(configs, ...)` — grille de graphiques, construite via `GridSpec` (voir §6)
+- `flux(liens, noeuds=None, ...)` — diagramme de Sankey (2026-08-10) : rubans de Bézier entre nœuds, colonnes déduites automatiquement (plus long chemin depuis une source, DAG requis), largeur proportionnelle à la valeur. Aucun module dédié — l'API `matplotlib.sankey.Sankey` standard rend des angles droits, incompatible avec l'esthétique du reste de la lib.
 - `dot_plot_comparatif(colonnes, descriptions=None, ...)` — McKinsey : comparaison multi-dimensions entre deux périodes (points creux/pleins + flèche)
 - `bulle_4d(x, y, taille, couleur_var, ...)` — McKinsey : scatter à 4 variables (position, taille, couleur ordinale), quadrants optionnels
 - `unit_chart(categories, valeurs, mode="proportion"|"ratio", ...)` — McKinsey : carrés de proportion ou de ratio offre/demande imbriqué
@@ -237,6 +238,10 @@ Les couleurs hex avec `#` dans les fichiers `.mplstyle` causent des warnings ou 
 
 **`appliquer()` dans `themes.py` et les couleurs**  
 Quand `appliquer()` patche `narratif.BG`, `narratif.TEXTE` etc., les figures déjà créées avant l'appel ne sont pas mises à jour — seules les nouvelles figures bénéficient du thème. C'est le comportement attendu et voulu.
+
+**`appliquer()` ne patchait pas `bg._T` — RÉSOLU (2026-08-10)**  
+Bug découvert en vérifiant visuellement `flux()` sous `themes.appliquer("sombre")` (exécution réelle, comme pour le bug `depuis_df()` ci-dessus — une lecture du code seule ne l'aurait pas montré). `appliquer()` mettait à jour `plt.rcParams`, `bg.PALETTE` et les constantes de `narratif.py`, mais jamais `bg._T` (le dict `bg`/`texte`/`texte_dim`/`grille`/`fond_neutre`/`serie_dim` introduit avec le système de thème `light`/`dark` de `init()`). Conséquence : après un `appliquer("sombre")`, les couleurs de données changeaient bien, mais le texte/fond de **toute fonction lisant `_T`** — c'est-à-dire `dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `tendances_grille`, `tendances_comparatives`, `bump`, `radar`, `ridgeline`, `slide`, `layout_rapport`, `box_plot`, `violin`, `waterfall`, `lollipop`, `slope`, `facet`, `dashboard`, `flux`, et tout `narratif.py` (qui lit `_bg._T` via `_t()`) — restait sur les valeurs du dernier `bg.init(theme=...)`. Cas concret observé : titre rendu en `#1A1C2E` (texte du thème clair) sur un fond de thème sombre, donc invisible.  
+Fix : `appliquer()` calcule maintenant `texte_dim`/`serie_dim` par interpolation entre `texte` et `fond` (`_teinte_intermediaire()`, nouveau helper dans `themes.py`) et réassigne `bg._T` en entier. Les thèmes de `themes.py` ne définissent pas nativement `texte_dim`/`serie_dim`/`fond_neutre` (contrairement aux thèmes `light`/`dark` de `beau_graphique.THEMES`) — d'où l'interpolation plutôt qu'une valeur exacte.
 
 **`tight_layout()` avec des sous-figures**  
 `fig.tight_layout(hspace=..., wspace=...)` n'est pas supporté sur toutes les versions de matplotlib. Utiliser `fig.subplots_adjust()` ou `GridSpec` avec `hspace`/`wspace` à la création.

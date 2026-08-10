@@ -286,7 +286,36 @@ dashboard([
 ```
 
 Types supportés : `ligne`, `barres`, `barres_groupees`, `aire`, `histogramme`,
-`nuage`, `camembert`, `heatmap`.
+`nuage`, `camembert`, `heatmap`, `flux`.
+
+---
+
+### `flux(liens, noeuds=None, couleur_ruban="source", ...)`
+
+Diagramme de flux (Sankey) — rubans en courbes de Bézier entre nœuds
+répartis automatiquement en colonnes (plus long chemin depuis une source),
+largeur proportionnelle à la valeur. Aucune configuration de layout manuelle
+requise. `liens` est une liste de tuples `(source, cible, valeur)`.
+
+```python
+from beau_graphique import flux
+
+flux([
+    ("Recherche", "Site A", 120), ("Pub", "Site A", 60),
+    ("Site A", "Achat", 90), ("Site A", "Abandon", 90),
+], titre="Parcours d'acquisition", sous_titre="Sessions, dernier trimestre")
+```
+
+`couleur_ruban="source"` (défaut) colore chaque ruban selon son nœud de
+départ — `"cible"` ou une couleur hex fixe sont aussi acceptés.
+`couleurs_noeuds={nom: couleur}` permet de fixer des couleurs explicites,
+sinon `PALETTE` est cyclée par ordre d'apparition.
+
+> **Limite connue** — `flux()` exige un graphe acyclique (DAG) : un lien qui
+> reviendrait vers un nœud déjà visité (`A → B → A`) lève une erreur claire
+> plutôt que de produire un rendu incohérent. Au-delà d'une dizaine de nœuds
+> par colonne, la lisibilité se dégrade (pas de minimisation de croisement
+> globale — seulement un tri local qui limite les croisements évidents).
 
 ---
 
