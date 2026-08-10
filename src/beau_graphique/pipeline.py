@@ -35,10 +35,23 @@ Intégration transparente
 import datetime
 import numpy as np
 import warnings
+import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
+
+
+def _print_safe(msg):
+    """Affiche *msg* ; replie sur une version sans caractères non supportés
+    si le terminal ne gère pas l'UTF-8 (ex: console Windows en cp1252 par
+    défaut — sinon UnicodeEncodeError sur les symboles ✓/⚠/┌─┐ etc.)."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(msg.encode(enc, errors="replace").decode(enc))
+
 
 # ── Import pandas / polars en optionnel ──────────────────────────────────────
 try:
@@ -416,7 +429,7 @@ def inspecter(df, max_cols: int = 20) -> None:
     ...
     """
     if not _is_df(df):
-        print(f"⚠ inspecter() attend un DataFrame, reçu : {type(df).__name__}")
+        _print_safe(f"⚠ inspecter() attend un DataFrame, reçu : {type(df).__name__}")
         return
 
     df_p = _to_pandas(df)
@@ -425,16 +438,16 @@ def inspecter(df, max_cols: int = 20) -> None:
     trunc = len(df_p.columns) > max_cols
 
     sep = "─" * 58
-    print(f"┌{sep}┐")
+    _print_safe(f"┌{sep}┐")
     titre = f"  DataFrame — {n_rows:,} lignes × {n_cols} colonnes"
     if trunc:
         titre += f"  (affichage limité à {max_cols})"
-    print(f"│{titre:<58}│")
-    print(f"├{sep}┤")
+    _print_safe(f"│{titre:<58}│")
+    _print_safe(f"├{sep}┤")
 
     # En-tête colonnes
-    print(f"│  {'Colonne':<22} {'Type':<12} {'NaN':>6} {'Unique':>8} {'Plage / Exemples':<18}│")
-    print(f"├{sep}┤")
+    _print_safe(f"│  {'Colonne':<22} {'Type':<12} {'NaN':>6} {'Unique':>8} {'Plage / Exemples':<18}│")
+    _print_safe(f"├{sep}┤")
 
     for col in cols:
         serie = df_p[col]
@@ -465,12 +478,12 @@ def inspecter(df, max_cols: int = 20) -> None:
                 outlier_flag = f" ⚡{n_out}"
 
         nan_display = f"{nan_str:>6}" if n_nan == 0 else f"\033[33m{nan_str:>6}\033[0m"
-        print(
+        _print_safe(
             f"│  {col:<22} {dtype:<12} {nan_str:>6} {n_uniq:>8}  "
             f"{plage:<18}{outlier_flag}│"
         )
 
-    print(f"├{sep}┤")
+    _print_safe(f"├{sep}┤")
 
     # Résumé
     total_nan  = int(df_p.isna().sum().sum())
@@ -479,12 +492,12 @@ def inspecter(df, max_cols: int = 20) -> None:
     num_cols   = [c for c in df_p.columns if _is_numeric(df_p[c])]
     cat_cols   = [c for c in df_p.columns if not _is_numeric(df_p[c])]
 
-    print(f"│  ✓ Complétude : {pct_complet:.1f}%   "
+    _print_safe(f"│  ✓ Complétude : {pct_complet:.1f}%   "
           f"NaN total : {total_nan}   "
           f"Doublons : {n_dup:<6}     │")
-    print(f"│  Num : {len(num_cols)} col(s)   Cat : {len(cat_cols)} col(s)"
+    _print_safe(f"│  Num : {len(num_cols)} col(s)   Cat : {len(cat_cols)} col(s)"
           f"{'':>30}│")
-    print(f"└{sep}┘")
+    _print_safe(f"└{sep}┘")
 
     # Conseils automatiques
     conseils = []
@@ -502,9 +515,9 @@ def inspecter(df, max_cols: int = 20) -> None:
             if n_out > 0:
                 conseils.append(f"→ ⚡ '{col}' : {n_out} outlier(s) IQR — nettoyer(df, clip_outliers=True)")
     for c in conseils:
-        print(f"  {c}")
+        _print_safe(f"  {c}")
     if not conseils:
-        print("  ✓ Données propres, prêt à tracer.")
+        _print_safe("  ✓ Données propres, prêt à tracer.")
 
 
 def _is_numeric(serie) -> bool:
@@ -628,11 +641,11 @@ def nettoyer(
 
     if verbose:
         if ops:
-            print(f"✓ nettoyer() — {len(df_p):,} lignes × {len(df_p.columns)} colonnes")
+            _print_safe(f"✓ nettoyer() — {len(df_p):,} lignes × {len(df_p.columns)} colonnes")
             for op in ops:
-                print(f"  · {op}")
+                _print_safe(f"  · {op}")
         else:
-            print(f"✓ nettoyer() — aucune modification ({len(df_p):,} lignes)")
+            _print_safe(f"✓ nettoyer() — aucune modification ({len(df_p):,} lignes)")
 
     return df_p
 

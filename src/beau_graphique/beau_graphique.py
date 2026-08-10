@@ -21,6 +21,19 @@ import numpy as np
 import datetime
 import os
 import textwrap
+import sys
+
+
+def _print_safe(msg):
+    """Affiche *msg* ; replie sur une version sans caractères non supportés
+    si le terminal ne gère pas l'UTF-8 (ex: console Windows en cp1252 par
+    défaut — sinon UnicodeEncodeError sur les symboles ✓/⚠/┌─┐ etc.)."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(msg.encode(enc, errors="replace").decode(enc))
+
 
 # ── Chemin vers le fichier de style (même dossier que ce module) ───────────
 _STYLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "beau_graphique.mplstyle")
@@ -149,7 +162,7 @@ def init(theme="light"):
     except ImportError:
         pass
 
-    print(f"✓ Style beau_graphique activé (thème : {nom_theme}).")
+    _print_safe(f"✓ Style beau_graphique activé (thème : {nom_theme}).")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
