@@ -25,6 +25,7 @@ from .beau_graphique import (
     layout_rapport,
     tendances_grille,
     tendances_comparatives,
+    flux,
     enregistrer_couleurs,
     reinitialiser_couleurs,
     colorier_si,

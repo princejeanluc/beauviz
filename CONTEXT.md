@@ -26,11 +26,14 @@ beau_viz/
 ├── galerie.ipynb             # démo exécutable de tous les modules
 ├── demo_mckinsey.py          # génère une figure par fonction McKinsey
 ├── src/beau_graphique/
-│   ├── beau_graphique.py     # module principal — graphiques de base + McKinsey + Phase 2
+│   ├── beau_graphique.py           # socle — graphiques de base (ligne, barres, aire, ...)
+│   ├── beau_graphique_mckinsey.py  # graphiques McKinsey (dot_plot_comparatif, bulle_4d, ...)
+│   ├── beau_graphique_layout.py    # mise en page (slide, layout_rapport)
 │   ├── beau_graphique.mplstyle
 │   ├── narratif.py           # graphiques narratifs — hiérarchie visuelle
 │   ├── pipeline.py           # intégration DataFrame optionnelle + formatage dates
-│   └── themes.py             # thèmes, palettes, daltonisme-safe
+│   ├── themes.py             # thèmes, palettes, daltonisme-safe
+│   └── export.py             # PNG/PDF, export batch
 └── tests/
     ├── test_mckinsey.py
     └── test_phase2.py
@@ -38,7 +41,9 @@ beau_viz/
 
 **Règle d'architecture fondamentale** : les modules sont indépendants et optionnels. On peut utiliser `beau_graphique.py` seul, ou l'enrichir avec les autres. Aucun module ne force un import obligatoire d'un autre — les imports croisés se font en `try/except` ou en import local dans la fonction.
 
-**Double mode d'installation (restructuration)** : les fichiers vivent dans `src/beau_graphique/` mais restent des modules **à plat**, sans aucun import relatif entre eux (`import beau_graphique as bg`, jamais `from . import beau_graphique`). `pyproject.toml` déclare `py-modules = ["beau_graphique", "narratif", "pipeline", "themes"]` avec `package-dir = {"" = "src/beau_graphique"}` — ça installe 4 modules top-level (pas un sous-paquet `beau_graphique.narratif`). Conséquence : les mêmes fichiers, copiés tels quels dans un dossier de travail (mode 1, zéro outillage) ou installés via `pip install -e .` (mode 2), s'utilisent avec exactement les mêmes imports (`from narratif import barres_focus`). Aucun bootstrap, aucun `sys.path.insert`, aucune branche `try/except ImportError` n'a été nécessaire pour ça — c'est la convention d'imports déjà en place (cross-imports en `import X as x` plats) qui rend les deux modes gratuits. Le seul compromis : `beau_graphique.mplstyle` n'est pas embarqué par le mode package (pas de `package_data` possible sans vrai sous-paquet) — `init()` retombe sur son fallback `rcParams` existant, qui couvrait déjà ce cas.
+**Double mode d'installation (restructuration)** : les fichiers vivent dans `src/beau_graphique/` mais restent des modules **à plat**, sans aucun import relatif entre eux (`import beau_graphique as bg`, jamais `from . import beau_graphique`). `pyproject.toml` déclare `py-modules = [...]` (7 modules, voir le fichier) avec `package-dir = {"" = "src/beau_graphique"}` — ça installe des modules top-level (pas un sous-paquet `beau_graphique.narratif`). Conséquence : les mêmes fichiers, copiés tels quels dans un dossier de travail (mode 1, zéro outillage) ou installés via `pip install -e .` (mode 2), s'utilisent avec exactement les mêmes imports (`from narratif import barres_focus`). Aucun bootstrap, aucun `sys.path.insert`, aucune branche `try/except ImportError` n'a été nécessaire pour ça — c'est la convention d'imports déjà en place (cross-imports en `import X as x` plats) qui rend les deux modes gratuits. Le seul compromis : `beau_graphique.mplstyle` n'est pas embarqué par le mode package (pas de `package_data` possible sans vrai sous-paquet) — `init()` retombe sur son fallback `rcParams` existant, qui couvrait déjà ce cas.
+
+**Split de `beau_graphique.py` (2026-08-07)** : le fichier avait grossi à 3239 lignes / 43 fonctions, seuil jugé ingérable. Les fonctions McKinsey (`dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `tendances_grille`, `tendances_comparatives`, `bump`, `radar`, `ridgeline`) sont parties dans `beau_graphique_mckinsey.py`, et la mise en page (`slide`, `layout_rapport`) dans `beau_graphique_layout.py`. Les deux nouveaux fichiers font `import beau_graphique as bg` pour lire `PALETTE`/`_T` à chaud (jamais `from beau_graphique import PALETTE`, qui figerait une copie obsolète après un `themes.appliquer()`). `beau_graphique.py` les réimporte à sa toute fin (après ses propres définitions, pour que l'import circulaire reste sûr) — `from beau_graphique import dot_plot_comparatif` continue de fonctionner à l'identique. Les fonctions listées ci-dessous restent groupées par thème (socle / McKinsey / layout) dans ce document même si leur fichier a changé — voir le nom de fichier entre parenthèses dans chaque en-tête de sous-section.
 
 ---
 
@@ -57,6 +62,7 @@ Fonctions publiques :
 - `camembert(labels, valeurs, ...)` — donut ou camembert plein
 - `heatmap(matrice, ...)` — matrice avec annotations et colormap
 - `dashboard(configs, ...)` — grille de graphiques, construite via `GridSpec` (voir §6)
+- `flux(liens, noeuds=None, ...)` — diagramme de Sankey (2026-08-10) : rubans de Bézier entre nœuds, colonnes déduites automatiquement (plus long chemin depuis une source, DAG requis), largeur proportionnelle à la valeur. Aucun module dédié — l'API `matplotlib.sankey.Sankey` standard rend des angles droits, incompatible avec l'esthétique du reste de la lib.
 - `dot_plot_comparatif(colonnes, descriptions=None, ...)` — McKinsey : comparaison multi-dimensions entre deux périodes (points creux/pleins + flèche)
 - `bulle_4d(x, y, taille, couleur_var, ...)` — McKinsey : scatter à 4 variables (position, taille, couleur ordinale), quadrants optionnels
 - `unit_chart(categories, valeurs, mode="proportion"|"ratio", ...)` — McKinsey : carrés de proportion ou de ratio offre/demande imbriqué
@@ -233,6 +239,10 @@ Les couleurs hex avec `#` dans les fichiers `.mplstyle` causent des warnings ou 
 **`appliquer()` dans `themes.py` et les couleurs**  
 Quand `appliquer()` patche `narratif.BG`, `narratif.TEXTE` etc., les figures déjà créées avant l'appel ne sont pas mises à jour — seules les nouvelles figures bénéficient du thème. C'est le comportement attendu et voulu.
 
+**`appliquer()` ne patchait pas `bg._T` — RÉSOLU (2026-08-10)**  
+Bug découvert en vérifiant visuellement `flux()` sous `themes.appliquer("sombre")` (exécution réelle, comme pour le bug `depuis_df()` ci-dessus — une lecture du code seule ne l'aurait pas montré). `appliquer()` mettait à jour `plt.rcParams`, `bg.PALETTE` et les constantes de `narratif.py`, mais jamais `bg._T` (le dict `bg`/`texte`/`texte_dim`/`grille`/`fond_neutre`/`serie_dim` introduit avec le système de thème `light`/`dark` de `init()`). Conséquence : après un `appliquer("sombre")`, les couleurs de données changeaient bien, mais le texte/fond de **toute fonction lisant `_T`** — c'est-à-dire `dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `tendances_grille`, `tendances_comparatives`, `bump`, `radar`, `ridgeline`, `slide`, `layout_rapport`, `box_plot`, `violin`, `waterfall`, `lollipop`, `slope`, `facet`, `dashboard`, `flux`, et tout `narratif.py` (qui lit `_bg._T` via `_t()`) — restait sur les valeurs du dernier `bg.init(theme=...)`. Cas concret observé : titre rendu en `#1A1C2E` (texte du thème clair) sur un fond de thème sombre, donc invisible.  
+Fix : `appliquer()` calcule maintenant `texte_dim`/`serie_dim` par interpolation entre `texte` et `fond` (`_teinte_intermediaire()`, nouveau helper dans `themes.py`) et réassigne `bg._T` en entier. Les thèmes de `themes.py` ne définissent pas nativement `texte_dim`/`serie_dim`/`fond_neutre` (contrairement aux thèmes `light`/`dark` de `beau_graphique.THEMES`) — d'où l'interpolation plutôt qu'une valeur exacte.
+
 **`tight_layout()` avec des sous-figures**  
 `fig.tight_layout(hspace=..., wspace=...)` n'est pas supporté sur toutes les versions de matplotlib. Utiliser `fig.subplots_adjust()` ou `GridSpec` avec `hspace`/`wspace` à la création.
 
@@ -310,7 +320,9 @@ Aucune graine aléatoire n'est fixée pour les fonctions qui utilisent `np.rando
 
 **Tests automatisés — partiellement RÉSOLU**  
 `tests/test_mckinsey.py` couvre les 4 fonctions McKinsey (`dot_plot_comparatif`, `bulle_4d`, `unit_chart`, `barres_connectees`) : retour `(fig, ax)`, paramètres vides, compatibilité `themes.appliquer()`, cas limites (taille de bulle constante, mode ratio avec/sans `reference`).  
-`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. 10/11 passent ; le test `test_ligne_dates_pandas` échoue dans cet environnement car il utilise `freq="ME"` (alias pandas ≥2.2) alors que l'environnement local a pandas 2.1.3 — c'est une limitation d'environnement, pas un défaut du code (le test est repris verbatim, ne pas le modifier pour le faire passer artificiellement).  
+`tests/test_phase2.py` couvre le formatage des dates (`ligne()` avec dates Python/pandas, entiers non traités comme dates), le retour `(fig, ax)` de `box_plot`/`violin`/`waterfall`/`lollipop`/`slope`, `facet()` avec un DataFrame, le paramètre `ax=` externe, et la compatibilité thème des nouvelles fonctions. `test_ligne_dates_pandas` utilise `freq="ME"` (alias pandas ≥2.2) — un `pytest.mark.skipif` (2026-08-07) le passe automatiquement en skip sur un environnement pandas <2.2 au lieu de rester rouge en permanence.  
+`tests/test_geometrie.py` (2026-08-07) comble un angle mort : la quasi-totalité des tests précédents ne vérifiait que `(fig, ax)` / absence de crash, pas la géométrie réelle — un bug comme l'ancien "plateau plat" de `_dessiner_tendance_cat` (voir plus bas) serait resté invisible pour la suite. Il inspecte les coordonnées réelles des artistes matplotlib : `Polygon.get_xy()` a exactement 5 sommets distincts pour `tendances_comparatives()` (avec les bonnes valeurs Y, pas un plateau), la géométrie plate-mais-voulue de `tendances_grille()` (barres à sommet plat + pentes, différente et correcte), la continuité cumulative des `Rectangle` de `waterfall()`, les positions Y avant/après de `dot_plot_comparatif()`, et l'ordre (non trié) des tailles de bulles de `bulle_4d()`.  
+Suite complète : 104/104 (environnement courant : pandas 2.2.3).  
 **Reste à faire** : `tests/test_basique.py` (smoke tests des 8 fonctions de base de `beau_graphique.py` + `narratif.py` historique) et `tests/test_pipeline.py` (wrappers `_df`, `depuis_df()`) n'existent pas encore.
 
 **Documentation interactive — RÉSOLU**  
@@ -331,6 +343,23 @@ Les messages d'erreur et de `inspecter()` sont en français. Si le projet est pa
 6. Tester avec un DataFrame minimal pandas avant de livrer
 7. Mettre à jour `README.md` à chaque ajout de fonction publique
 
+### Workflow git — à respecter à chaque session
+
+Il n'y a pas de CI : rien n'empêche `main` local et `origin/main` de diverger
+silencieusement si cette routine n'est pas suivie. C'est exactement ce qui
+s'est produit le 2026-08-07 — une branche mergée via PR sur GitHub pendant
+que 12 commits s'accumulaient en local, découvert seulement au moment du
+`git push`.
+
+1. **En début de session** : `git fetch origin` puis vérifier `git log
+   HEAD..origin/main --oneline` — si non vide, `git merge origin/main` avant
+   de commencer à travailler.
+2. **Avant chaque commit** : lancer `python -m pytest tests/ -q` — décision
+   assumée de ne pas mettre en place de CI pour l'instant, donc rien
+   n'exécute les tests à votre place.
+3. **En fin de session** : `git push origin main` — ne pas laisser de
+   commits locaux non poussés d'une session à l'autre.
+
 ---
 
 ## 10. Structure cible du projet à terme
@@ -339,15 +368,21 @@ Les messages d'erreur et de `inspecter()` sont en français. Si le projet est pa
 beau_viz/
 ├── pyproject.toml            # packaging pip install -e . — fait
 ├── src/beau_graphique/
-│   ├── beau_graphique.py     # graphiques de base + McKinsey — stable
+│   ├── beau_graphique.py           # socle — stable
+│   ├── beau_graphique_mckinsey.py  # McKinsey — stable
+│   ├── beau_graphique_layout.py    # mise en page — stable
 │   ├── beau_graphique.mplstyle
 │   ├── narratif.py           # hiérarchie visuelle + barres_connectees — stable
 │   ├── pipeline.py           # DataFrame — stable
 │   ├── themes.py             # thèmes — stable
-│   └── export.py             # PDF, HTML, batch — à créer
+│   └── export.py             # PNG/PDF/batch — fait
 ├── tests/
 │   ├── test_mckinsey.py      # fait
 │   ├── test_phase2.py        # dates, box_plot/violin/waterfall/lollipop/slope/facet — fait
+│   ├── test_export.py, test_layout.py, test_nouveaux_charts.py,
+│   │   test_barres_empilees_et_narratif.py  # fait
+│   ├── test_geometrie.py     # assertions sur coordonnées réelles (Polygon,
+│   │   Rectangle, scatter) — pas seulement (fig, ax) — fait
 │   ├── test_basique.py       # smoke tests des fonctions de base — à créer
 │   └── test_pipeline.py      # tests DataFrame — à créer
 ├── galerie.ipynb              # démo visuelle complète — fait

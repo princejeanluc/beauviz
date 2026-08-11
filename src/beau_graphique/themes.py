@@ -32,6 +32,19 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mc
 import numpy as np
 import os
+import sys
+
+
+def _print_safe(msg):
+    """Affiche *msg* ; replie sur une version sans caractères non supportés
+    si le terminal ne gère pas l'UTF-8 (ex: console Windows en cp1252 par
+    défaut — sinon UnicodeEncodeError sur les symboles ✓/⚠/┌─┐ etc.)."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(msg.encode(enc, errors="replace").decode(enc))
+
 
 # ── Référence vers beau_graphique pour patcher PALETTE ───────────────────────
 _BG_MODULE = None
@@ -46,6 +59,16 @@ def _get_bg():
         except ImportError:
             pass
     return _BG_MODULE
+
+
+def _teinte_intermediaire(c1: str, c2: str, t: float) -> str:
+    """Mélange deux couleurs hex (t=0 -> c1, t=1 -> c2)."""
+    r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+    r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+    r = round(r1 + (r2 - r1) * t)
+    g = round(g1 + (g2 - g1) * t)
+    b = round(b1 + (b2 - b1) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -307,11 +330,25 @@ def appliquer(nom_theme: str, verbose: bool = True) -> dict:
             color=palette, linestyle=theme["linestyles"]
         )
 
-    # ── Mise à jour PALETTE dans beau_graphique ───────────────────────────────
+    # ── Mise à jour PALETTE + _T dans beau_graphique ──────────────────────────
+    # _T pilote fond/texte/grille pour dot_plot_comparatif, bump, radar, slide,
+    # layout_rapport, waterfall, box_plot, facet, dashboard, flux, et tout
+    # narratif.py (qui le lit dynamiquement via _t()/_bg._T) — sans ce patch,
+    # appliquer() changeait les couleurs de données (PALETTE) mais laissait le
+    # texte/fond de ces fonctions sur l'état du dernier bg.init(theme=...),
+    # avec un vrai risque de texte illisible (ex: texte sombre sur fond sombre).
     PALETTE_ACTIVE = list(palette)
     bg = _get_bg()
     if bg is not None:
         bg.PALETTE = list(palette)
+        bg._T = {
+            "bg":          fond,
+            "texte":       texte,
+            "texte_dim":   _teinte_intermediaire(texte, fond, 0.35),
+            "grille":      grille,
+            "fond_neutre": fond if mode == "sombre" else "#FFFFFF",
+            "serie_dim":   _teinte_intermediaire(texte, fond, 0.55),
+        }
 
     # ── Mise à jour couleurs dans narratif si disponible ─────────────────────
     try:
@@ -327,9 +364,9 @@ def appliquer(nom_theme: str, verbose: bool = True) -> dict:
 
     if verbose:
         mode_icon = "🌙" if mode == "sombre" else "☀"
-        print(f"✓ Thème '{theme['nom']}' activé {mode_icon}")
+        _print_safe(f"✓ Thème '{theme['nom']}' activé {mode_icon}")
         if "note" in theme:
-            print(f"  ℹ {theme['note']}")
+            _print_safe(f"  ℹ {theme['note']}")
 
     return theme
 
@@ -353,7 +390,7 @@ def appliquer_palette(palette: list, verbose: bool = True) -> None:
         bg.PALETTE = list(palette)
 
     if verbose:
-        print(f"✓ Palette custom appliquée ({len(palette)} couleurs)")
+        _print_safe(f"✓ Palette custom appliquée ({len(palette)} couleurs)")
         _afficher_palette(palette)
 
 
@@ -368,14 +405,14 @@ def reinitialiser(verbose: bool = True) -> None:
 
 def lister() -> None:
     """Affiche tous les thèmes disponibles avec leurs couleurs."""
-    print("┌" + "─"*60 + "┐")
-    print(f"│  {'Thèmes disponibles':<58}│")
-    print("├" + "─"*60 + "┤")
+    _print_safe("┌" + "─"*60 + "┐")
+    _print_safe(f"│  {'Thèmes disponibles':<58}│")
+    _print_safe("├" + "─"*60 + "┤")
     for cle, t in THEMES.items():
         actif = " ◀ actif" if cle == _THEME_ACTIF else ""
-        print(f"│  {cle:<22} {t['description'][:30]:<30}{actif:<8}│")
-    print("└" + "─"*60 + "┘")
-    print("\nUsage : appliquer('finance')  |  appliquer('daltonisme_safe')")
+        _print_safe(f"│  {cle:<22} {t['description'][:30]:<30}{actif:<8}│")
+    _print_safe("└" + "─"*60 + "┘")
+    _print_safe("\nUsage : appliquer('finance')  |  appliquer('daltonisme_safe')")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -520,7 +557,7 @@ def apercu(palette_ou_theme=None, figsize=None):
 
 def _afficher_palette(palette: list) -> None:
     """Affichage terminal simple d'une palette."""
-    print("  Couleurs : " + "  ".join(palette))
+    _print_safe("  Couleurs : " + "  ".join(palette))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -552,7 +589,7 @@ def palette_safe(n: int = 8, type_daltonisme: str = "universel") -> list:
     }
     base = mapping.get(type_daltonisme, mapping["universel"])
     if n > len(base):
-        print(f"⚠ Seulement {len(base)} couleurs disponibles pour '{type_daltonisme}'.")
+        _print_safe(f"⚠ Seulement {len(base)} couleurs disponibles pour '{type_daltonisme}'.")
     return base[:n]
 
 

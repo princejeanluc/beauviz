@@ -33,6 +33,18 @@ import pathlib
 import subprocess
 import sys
 
+
+def _print_safe(msg):
+    """Affiche *msg* ; replie sur une version sans caractères non supportés
+    si le terminal ne gère pas l'UTF-8 (ex: console Windows en cp1252 par
+    défaut — sinon UnicodeEncodeError sur les symboles ✓/⚠/┌─┐ etc.)."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(msg.encode(enc, errors="replace").decode(enc))
+
+
 # ── Résolution par défaut selon le format ────────────────────────────────────
 _DPI_DEFAUT = {
     "png":  180,   # écran haute densité
@@ -126,7 +138,7 @@ def sauvegarder(fig, nom, dossier=".", fmt="png", dpi=None, ouvrir=False):
 
         figure.savefig(chemin, **kw)
         chemins.append(chemin)
-        print(f"  ✓ {chemin}")
+        _print_safe(f"  ✓ {chemin}")
 
     if ouvrir and chemins:
         _ouvrir(chemins[0])
@@ -201,7 +213,7 @@ def pdf_rapport(figures, nom, dossier=".", titre="", auteur="", dpi=150):
             pdf.savefig(figure, bbox_inches="tight", dpi=dpi)
 
     n = len(pages)
-    print(f"  ✓ {chemin}  ({n} page{'s' if n > 1 else ''})")
+    _print_safe(f"  ✓ {chemin}  ({n} page{'s' if n > 1 else ''})")
     return chemin
 
 
@@ -236,12 +248,12 @@ def export_batch(figures, dossier=".", fmt="png", dpi=None):
     """
     items = list(figures.items()) if isinstance(figures, dict) else list(figures)
     fmt_label = fmt if isinstance(fmt, str) else "+".join(fmt)
-    print(f"Export batch → {dossier}  ({len(items)} figure(s), fmt={fmt_label})")
+    _print_safe(f"Export batch → {dossier}  ({len(items)} figure(s), fmt={fmt_label})")
 
     tous = []
     for nom, fig in items:
         res = sauvegarder(fig, nom, dossier=dossier, fmt=fmt, dpi=dpi)
         tous.extend(res if isinstance(res, list) else [res])
 
-    print(f"  {len(tous)} fichier(s) créé(s).")
+    _print_safe(f"  {len(tous)} fichier(s) créé(s).")
     return tous

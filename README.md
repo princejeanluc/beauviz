@@ -6,19 +6,26 @@ Librairie matplotlib orientée **communication visuelle** — graphiques impacta
 beau_viz/
 ├── pyproject.toml
 ├── src/beau_graphique/
-│   ├── beau_graphique.py        # graphiques de base (8 types + McKinsey)
-│   ├── beau_graphique.mplstyle  # style global matplotlib
-│   ├── narratif.py              # hiérarchie visuelle & annotations
-│   ├── pipeline.py              # intégration DataFrame (optionnel)
-│   └── themes.py                # thèmes, palettes, daltonisme-safe
+│   ├── beau_graphique.py           # socle : graphiques de base (ligne, barres, aire, ...)
+│   ├── beau_graphique_mckinsey.py  # graphiques McKinsey (dot_plot_comparatif, bulle_4d, ...)
+│   ├── beau_graphique_layout.py    # mise en page (slide, layout_rapport)
+│   ├── beau_graphique.mplstyle     # style global matplotlib
+│   ├── narratif.py                 # hiérarchie visuelle & annotations
+│   ├── pipeline.py                 # intégration DataFrame (optionnel)
+│   ├── themes.py                   # thèmes, palettes, daltonisme-safe
+│   └── export.py                   # sauvegarde PNG/PDF, export batch
 └── tests/
 ```
 
-Les 4 modules (`beau_graphique`, `narratif`, `pipeline`, `themes`) sont des
-fichiers **à plat**, sans imports relatifs entre eux (`import beau_graphique as bg`,
-jamais `from .beau_graphique import ...`). Ça permet d'utiliser indifféremment
-l'un des deux modes d'installation ci-dessous — le code applicatif (`from
-beau_graphique import ligne`) est identique dans les deux cas.
+Tous les modules sont des fichiers **à plat**, sans imports relatifs entre
+eux (`import beau_graphique as bg`, jamais `from .beau_graphique import
+...`). `beau_graphique_mckinsey.py` et `beau_graphique_layout.py` importent
+le socle via `import beau_graphique as bg` et sont ré-importés à la fin de
+`beau_graphique.py` — `from beau_graphique import dot_plot_comparatif`
+fonctionne exactement comme si tout vivait dans un seul fichier. Ça permet
+d'utiliser indifféremment l'un des deux modes d'installation ci-dessous — le
+code applicatif (`from beau_graphique import ligne`) est identique dans les
+deux cas.
 
 ---
 
@@ -162,6 +169,20 @@ barres_groupees(
 )
 ```
 
+`empile=True` empile les barres (valeurs absolues) au lieu de les mettre
+côte à côte ; `normalise=True` empile ET normalise chaque catégorie à 100 %
+(implique `empile=True`) — utile pour comparer une composition (mix produit,
+répartition d'appareils) plutôt que des valeurs absolues.
+
+```python
+barres_groupees(
+    categories=["T1", "T2", "T3", "T4"],
+    groupes={"Mobile": [40, 50, 55, 60], "Desktop": [60, 50, 45, 40]},
+    empile=True, normalise=True,
+    titre="Répartition du trafic (%)",
+)
+```
+
 ---
 
 ### `aire(x, y_series, ...)`
@@ -265,17 +286,46 @@ dashboard([
 ```
 
 Types supportés : `ligne`, `barres`, `barres_groupees`, `aire`, `histogramme`,
-`nuage`, `camembert`, `heatmap`.
+`nuage`, `camembert`, `heatmap`, `flux`.
+
+---
+
+### `flux(liens, noeuds=None, couleur_ruban="source", ...)`
+
+Diagramme de flux (Sankey) — rubans en courbes de Bézier entre nœuds
+répartis automatiquement en colonnes (plus long chemin depuis une source),
+largeur proportionnelle à la valeur. Aucune configuration de layout manuelle
+requise. `liens` est une liste de tuples `(source, cible, valeur)`.
+
+```python
+from beau_graphique import flux
+
+flux([
+    ("Recherche", "Site A", 120), ("Pub", "Site A", 60),
+    ("Site A", "Achat", 90), ("Site A", "Abandon", 90),
+], titre="Parcours d'acquisition", sous_titre="Sessions, dernier trimestre")
+```
+
+`couleur_ruban="source"` (défaut) colore chaque ruban selon son nœud de
+départ — `"cible"` ou une couleur hex fixe sont aussi acceptés.
+`couleurs_noeuds={nom: couleur}` permet de fixer des couleurs explicites,
+sinon `PALETTE` est cyclée par ordre d'apparition.
+
+> **Limite connue** — `flux()` exige un graphe acyclique (DAG) : un lien qui
+> reviendrait vers un nœud déjà visité (`A → B → A`) lève une erreur claire
+> plutôt que de produire un rendu incohérent. Au-delà d'une dizaine de nœuds
+> par colonne, la lisibilité se dégrade (pas de minimisation de croisement
+> globale — seulement un tri local qui limite les croisements évidents).
 
 ---
 
 ### Tracer dans un axe existant — `ax=...`
 
-Toutes les fonctions de `beau_graphique.py` acceptent un paramètre optionnel
-`ax`. Si fourni, le graphique est tracé dans cet axe au lieu d'en créer un
-nouveau — utile pour composer plusieurs graphiques dans une figure
-matplotlib que vous contrôlez vous-même (sous-figures, `plt.subplots()`,
-grilles personnalisées).
+Toutes les fonctions de `beau_graphique.py` et `narratif.py` acceptent un
+paramètre optionnel `ax`. Si fourni, le graphique est tracé dans cet axe au
+lieu d'en créer un nouveau — utile pour composer plusieurs graphiques dans
+une figure matplotlib que vous contrôlez vous-même (sous-figures,
+`plt.subplots()`, grilles personnalisées).
 
 ```python
 import matplotlib.pyplot as plt
@@ -284,6 +334,27 @@ from beau_graphique import barres, ligne
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 barres(["A", "B", "C"], [10, 20, 15], ax=axes[0], titre="Barres")
 ligne([1, 2, 3], {"Série": [5, 8, 6]}, ax=axes[1], titre="Ligne")
+```
+
+### Fond transparent — `background=...`
+
+Toutes les fonctions publiques de `beau_graphique.py` et `narratif.py`
+acceptent `background`. Valeurs possibles : `None` (fond du thème actif,
+défaut), `"transparent"` (fond et axes transparents — pratique pour coller
+la figure sur un slide PowerPoint déjà stylé), ou une couleur hex explicite.
+
+```python
+barres(["A", "B"], [10, 20], background="transparent")
+```
+
+### Bornes de l'axe Y — `vmin=`, `vmax=`
+
+`ligne()`, `barres()` et `lollipop()` acceptent `vmin`/`vmax` pour forcer les
+limites de l'axe Y au lieu de l'échelle automatique (utile pour synchroniser
+plusieurs graphiques sur la même échelle, ou zoomer sur une plage précise).
+
+```python
+ligne(x, y_series={"KPI": valeurs}, vmin=0, vmax=100)
 ```
 
 ---
@@ -361,6 +432,119 @@ barres_connectees(
     valeurs=[[295, 245, 290], [40, 63, 95]],
     titre="Investissements par tendance, 2022–2024 (Mds$)",
 )
+```
+
+### `tendances_grille(items, ncols=4, ...)`
+
+Grille de mini-graphiques "barres temporelles" style rapport McKinsey — un
+polygone continu (barres + pentes de transition + badge cumulatif) par
+catégorie, chacune sur son propre axe Y.
+
+```python
+from beau_graphique import tendances_grille
+
+tendances_grille([
+    {"nom": "Intelligence artificielle", "valeurs": [95, 79, 117],
+     "deltas": [-17, 48], "cumul": 22, "couleur": "#1B2A8A"},
+    {"nom": "Cloud et edge computing", "valeurs": [26, 41, 61],
+     "deltas": [58, 50], "cumul": 138, "couleur": "#4CC9F0"},
+], ncols=2, titre="Investissements par tendance technologique")
+```
+
+### `tendances_comparatives(items, ncols=4, ...)`
+
+Variante de `tendances_grille()` où les catégories d'une même rangée
+**partagent le même axe Y** — pour comparer directement l'échelle absolue
+entre catégories plutôt que leur seule forme. L'année intermédiaire devient
+un point de convergence entre deux polygones distincts.
+
+```python
+from beau_graphique import tendances_comparatives
+
+tendances_comparatives(items, ncols=2, titre="Comparaison à échelle commune")
+```
+
+### `bump(periodes, series, ...)`
+
+Bump chart — évolution du classement (rang) de plusieurs entités entre
+périodes, lignes lissées, rang 1 en haut.
+
+```python
+from beau_graphique import bump
+
+bump(
+    periodes=["2021", "2022", "2023", "2024"],
+    series={"Orange": [1, 2, 1, 1], "MTN": [2, 1, 2, 3], "Camtel": [3, 3, 3, 2]},
+    titre="Classement des opérateurs",
+)
+```
+
+### `radar(categories, series, ...)`
+
+Graphique radar (spider chart) — profil multi-dimensionnel d'une ou
+plusieurs entités sur un même jeu de critères.
+
+```python
+from beau_graphique import radar
+
+radar(
+    categories=["Vitesse", "Force", "Endurance", "Précision", "Agilité"],
+    series={"Joueur A": [8, 7, 9, 6, 9], "Joueur B": [6, 9, 7, 8, 7]},
+    titre="Comparaison des profils athlétiques",
+)
+```
+
+### `ridgeline(series, ...)`
+
+Ridgeline plot (Joy Plot) — distributions superposées et décalées
+verticalement, pour comparer la forme (KDE) de plusieurs groupes.
+
+```python
+from beau_graphique import ridgeline
+
+ridgeline(series={
+    "Groupe A": donnees_a, "Groupe B": donnees_b, "Groupe C": donnees_c,
+}, titre="Comparaison des distributions")
+```
+
+### `slide(elements, nrows=3, ncols=4, ...)`
+
+Mise en page libre façon éditeur de slides : chaque cellule d'une grille
+reçoit du texte, un graphique (`fn=`/`kwargs=`), un KPI ou un callout.
+Philosophie texte-first — on construit la narration avant les métriques.
+
+```python
+from beau_graphique import slide, barres
+
+slide([
+    {"pos": (0, 0, 1, 4), "type": "titre", "texte": "Le marché EMEA accélère au T3"},
+    {"pos": (1, 0, 1, 1), "type": "texte", "texte": "Croissance organique au-delà des projections."},
+    {"pos": (1, 1, 1, 2), "type": "graphique", "fn": barres,
+     "kwargs": {"categories": mois, "valeurs": ventes}},
+    {"pos": (1, 3, 1, 1), "type": "kpi", "valeur": "+18 %", "label": "Croissance T3", "positif": True},
+], nrows=2, ncols=4)
+```
+
+### `layout_rapport(titre="", kpis=None, n_graphiques=1, ...)`
+
+Gabarit rapport/slide prêt à l'emploi : bande titre + tuiles KPI en haut,
+zone(s) graphique en bas (à remplir via `ax=` sur n'importe quelle fonction
+de la librairie). Le style des tuiles KPI est configurable via `style_kpi`
+(`"accent"`, `"filled"`, `"simple"`, `"minimal"`, ou un dict de flags bruts).
+
+```python
+from beau_graphique import layout_rapport, barres, ligne
+
+fig, zones = layout_rapport(
+    titre="Performance commerciale Q4 2024",
+    kpis=[
+        {"label": "Ventes", "valeur": "1,24 M", "delta": "+12 %", "positif": True},
+        {"label": "Marge", "valeur": "23 %", "delta": "−2 pts", "positif": False},
+    ],
+    n_graphiques=2,
+)
+barres(mois, ventes, titre="Ventes par mois", ax=zones["graphiques"][0])
+ligne(mois, {"Douala": v1, "Yaoundé": v2}, ax=zones["graphiques"][1])
 ```
 
 ---
@@ -644,6 +828,60 @@ annoter_point(ax, x=8, y=95, label="Pic historique",
 
 ---
 
+### `cascade(categories, valeurs, label_total="Total", ...)`
+
+Waterfall/bridge chart narratif : décompose une variation en contributions
+positives (vert) et négatives (rouge) cumulées entre un départ et une
+arrivée, avec pointillés de liaison entre les barres.
+
+```python
+from narratif import cascade
+
+cascade(
+    categories=["Départ", "Nouveaux", "Churn", "Upsell", "Arrivée"],
+    valeurs=[1200, 340, -180, 90, 1450],
+    label_total="Arrivée",
+    titre="MRR : +250 k€ sur le trimestre",
+)
+```
+
+### `pente(categories, valeurs_avant, valeurs_apres, top_n=3, ...)`
+
+Slope chart narratif : compare N entités entre deux périodes, seules les
+`top_n` entités à plus forte variation absolue reçoivent l'accent — les
+autres passent en gris.
+
+```python
+from narratif import pente
+
+pente(
+    categories=["France", "Allemagne", "Espagne", "Italie"],
+    valeurs_avant=[72, 68, 61, 55],
+    valeurs_apres=[78, 65, 70, 52],
+    label_avant="2022", label_apres="2024",
+    titre="L'Espagne gagne 9 pts — plus forte progression",
+    top_n=1,
+)
+```
+
+### `nuage_annote(x, y, labels, tailles=None, focus=None, quadrants=False, ...)`
+
+Scatter annoté : chaque point est étiqueté directement (pas de légende),
+taille optionnelle en bulle, mise en accent d'un sous-ensemble via `focus`,
+et quadrants de positionnement optionnels avec libellés.
+
+```python
+from narratif import nuage_annote
+
+nuage_annote(
+    x=[22, 45, 78, 31, 60], y=[3.2, 1.8, 4.5, 2.1, 3.8],
+    labels=["A", "B", "C", "D", "E"],
+    tailles=[100, 200, 500, 80, 320],
+    focus=2, quadrants=True,
+    quadrant_labels=("Faible/Fort", "Fort/Fort", "Faible/Faible", "Fort/Faible"),
+)
+```
+
 ### `palette_focus(n_total, indices_focus, accent)`
 
 Génère une liste de couleurs — accent pour les indices ciblés, gris pour le reste.  
@@ -924,7 +1162,7 @@ annoter_seuil(ax, y=df["Ventes"].mean(), label="Moyenne annuelle")
 ## Prochains axes d'enrichissement
 
 - **Nouveaux types** — `ligne_double_axe`, `scatter_matrix`, `coordonnees_paralleles`,
-  `treemap`, `waffle`, `bump_chart`, `beeswarm` (voir [`GUIDE_CHOIX.md`](GUIDE_CHOIX.md))
-- **Mise en page narrative** — layout titre affirmatif + bande KPI
+  `treemap`, `waffle`, `beeswarm` (voir [`GUIDE_CHOIX.md`](GUIDE_CHOIX.md))
 - **Annotations avancées** — timeline, zones d'incertitude, intervalles de confiance
-- **Export** — PDF multi-pages, HTML interactif (Plotly), batch PNG
+- **Export** — HTML interactif (Plotly) ; `export.py` couvre déjà PNG haute résolution,
+  PDF vectoriel/multi-pages et export batch
