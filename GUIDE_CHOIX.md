@@ -49,7 +49,9 @@ Combien de variables numériques principales avez-vous ?
 │   │
 │   ├─ Je veux montrer une RÉPARTITION (parties d'un tout)
 │   │   ├─ 2 à 5 catégories seulement → camembert()
-│   │   └─ Plus de 5 catégories, ou comparaison de plusieurs ensembles → unit_chart(mode="proportion")
+│   │   ├─ Plus de 5 catégories, ou comparaison de plusieurs ensembles → unit_chart(mode="proportion")
+│   │   └─ … ET l'importance relative des catégories elles-mêmes compte
+│   │      aussi (poids/taille de chaque catégorie) → mekko()
 │   │
 │   ├─ Je veux DÉCOMPOSER une variation en contributions → waterfall()
 │   │   └─ … avec un seul message à faire ressortir (gris/accent) → cascade()
@@ -275,6 +277,18 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Exemple minimal** : `unit_chart(categories=["Python","C++"], valeurs=[37,21], mode="proportion")`
 - **Erreurs courantes** : confondre `valeurs` déjà-ratio et `reference`+`valeurs` à diviser en mode `"ratio"`.
 - **Voir aussi** : `camembert()`.
+
+### `mekko()`
+
+- **En une phrase** : Marimekko chart — largeur de colonne = poids de la catégorie, hauteur empilée = composition normalisée à 100 %, deux dimensions croisées en une figure.
+- **Utiliser quand** : la composition de chaque catégorie compte (parts d'acteurs, mix produit) ET l'importance relative des catégories elles-mêmes compte aussi (taille de marché, volume) — les deux perdues si on les sépare en deux graphiques.
+- **Ne pas utiliser quand** : toutes les catégories ont le même poids (la largeur variable ajoute de la complexité de lecture pour rien — préférez `barres_groupees(empile=True, normalise=True)`).
+- **Nombre de variables** : 1 poids par catégorie + N segments empilés par catégorie.
+- **Nombre de catégories recommandé** : 3 à 8 colonnes, 2 à 5 segments.
+- **Données requises** : `categories`, `poids` (largeur, >0), `segments` (dict `{"nom": [valeurs par catégorie]}`).
+- **Exemple minimal** : `mekko(["A","B"], [100,200], {"X":[30,10],"Y":[70,90]})`
+- **Erreurs courantes** : colonnes trop nombreuses ou trop étroites qui perdent leurs étiquettes de segment ; oublier `focus` alors qu'un seul acteur/segment est le vrai sujet du message.
+- **Voir aussi** : `unit_chart()`, `barres_groupees(empile=True)`.
 
 ### `barres_connectees()`
 
@@ -535,6 +549,7 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 | 4 dimensions sur des entités | Comment se positionnent les entités sur 4 critères ? | `bulle_4d()` | 2× `nuage()` côte à côte | Tableau de chiffres bruts |
 | Répartition d'un tout, peu de parts | Comment le tout se découpe-t-il ? | `camembert()` | `unit_chart(mode="proportion")` | `camembert()` à 6+ parts |
 | Répartition d'un tout, nombreuses parts | Quelle proportion pour chaque catégorie ? | `unit_chart(mode="proportion")` | `barres()` horizontal | `camembert()` |
+| Composition ET poids des catégories | Comment ça se décompose, et laquelle de ces catégories pèse le plus ? | `mekko()` | `barres_groupees(empile=True)` si poids égaux | Camembert par catégorie (perd le poids relatif) |
 | Ratio offre/demande | L'offre couvre-t-elle la demande ? | `unit_chart(mode="ratio")` | `divergent()` sur l'écart | `camembert()` |
 | Avant/après, 1 catégorie | Qu'est-ce qui a changé ? | `comparaison_avant_apres()` | `divergent()` sur le delta | `barres_groupees()` à 2 barres |
 | Avant/après, plusieurs catégories | Qui a progressé, qui a régressé ? | `slope()` | `comparaison_avant_apres()` | `ligne()` à 2 points |

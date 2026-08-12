@@ -1043,3 +1043,164 @@ def nuage_annote(x, y, labels,
     _header(fig, ax, titre, sous_titre, note)
     return _finalize(fig, skip_layout=external_ax), ax
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ⑫ mekko — Marimekko chart (composition empilée × poids de colonne)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def mekko(categories, poids, segments, focus=None,
+          titre="", sous_titre="", note="",
+          accent=ACCENT_DEFAUT, fmt_poids="{:.0f}", fmt_segment="{:.0f}%",
+          figsize=None, format=None, background=None, ax=None):
+    """Marimekko chart — composition empilée (hauteur) × poids de colonne (largeur).
+
+    Chaque colonne représente une catégorie dont la largeur est proportionnelle
+    à son poids (ex : taille de marché) ; à l'intérieur, les segments empilés
+    montrent une composition normalisée à 100 % (ex : part de chaque acteur).
+    Permet de lire simultanément deux dimensions : combien pèse la catégorie,
+    et comment elle se décompose.
+
+    Quand l'utiliser
+    -----------------
+    Comparer la composition de plusieurs catégories ET leur importance
+    relative en une seule figure (parts de marché par région où chaque région
+    a une taille différente, mix produit par segment de clientèle...).
+
+    Ne pas utiliser
+    ----------------
+    Si toutes les catégories ont le même poids — un simple
+    ``barres_groupees(empile=True, normalise=True)`` suffit et évite la
+    complexité de lecture d'une largeur variable.
+
+    Parameters
+    ----------
+    categories  : noms des colonnes.
+    poids       : poids de chaque colonne (largeur) — valeurs strictement
+                  positives, ex: taille de marché.
+    segments    : dict ``{"nom_segment": [val_cat1, val_cat2, ...]}`` — une
+                  valeur par catégorie, empilée verticalement et normalisée
+                  automatiquement à 100 % par colonne (c'est la définition
+                  même d'un Mekko — sans normalisation, les colonnes ne
+                  seraient plus comparables entre elles).
+    focus       : nom de segment (ou liste) mis en accent — les autres
+                  passent en gris. ``None`` (défaut) → chaque segment reçoit
+                  une couleur distincte de la palette.
+    accent      : couleur d'accent quand ``focus`` est utilisé.
+    fmt_poids   : format du poids affiché sous chaque colonne.
+    fmt_segment : format du pourcentage affiché dans chaque segment (affiché
+                  seulement si le segment est assez grand pour rester lisible).
+
+    Returns
+    -------
+    (fig, ax)
+
+    Exemple
+    -------
+    >>> mekko(
+    ...     categories=["Littoral", "Centre", "Ouest"],
+    ...     poids=[420, 260, 180],
+    ...     segments={
+    ...         "Orange": [45, 38, 30],
+    ...         "MTN":    [40, 42, 48],
+    ...         "Camtel": [15, 20, 22],
+    ...     },
+    ...     focus="Orange",
+    ...     titre="Orange domine le Littoral mais recule à l'Ouest",
+    ... )
+    """
+    import beau_graphique as _bg
+    figsize = _bg._resoudre_figsize(figsize, format)
+    T = _t()
+
+    n = len(categories)
+    if len(poids) != n:
+        raise ValueError(
+            f"mekko() : 'categories' ({n}) et 'poids' ({len(poids)}) doivent "
+            f"avoir la même longueur."
+        )
+    if any(p <= 0 for p in poids):
+        raise ValueError("mekko() : tous les poids doivent être strictement positifs.")
+    if not segments:
+        raise ValueError("mekko() : 'segments' est vide.")
+    for nom, vals in segments.items():
+        if len(vals) != n:
+            raise ValueError(
+                f"mekko() : le segment '{nom}' a {len(vals)} valeurs, "
+                f"attendu {n} (autant que 'categories')."
+            )
+        if any(v < 0 for v in vals):
+            raise ValueError(f"mekko() : le segment '{nom}' contient une valeur négative.")
+
+    totaux_col = [sum(segments[s][i] for s in segments) for i in range(n)]
+    for i, t in enumerate(totaux_col):
+        if t <= 0:
+            raise ValueError(
+                f"mekko() : la catégorie '{categories[i]}' a une somme de "
+                f"segments nulle — impossible à normaliser."
+            )
+
+    noms_segments = list(segments.keys())
+    focus_liste = []
+    if focus is not None:
+        focus_liste = [focus] if isinstance(focus, str) else list(focus)
+        manquants = [f for f in focus_liste if f not in noms_segments]
+        if manquants:
+            raise ValueError(
+                f"mekko() : focus {manquants} absent(s) de 'segments' "
+                f"({noms_segments})."
+            )
+        indices_focus = [noms_segments.index(f) for f in focus_liste]
+        couleurs = palette_focus(len(noms_segments), indices_focus, accent)
+        alphas = [1.0 if c == accent else 0.55 for c in couleurs]
+    else:
+        couleurs = _bg._palette_pour(noms_segments)
+        alphas = [1.0] * len(noms_segments)
+
+    external_ax = ax is not None
+    fig, ax = _init_ax(figsize or (11, 6), background, ax=ax)
+
+    gap = sum(poids) * 0.02
+    x_gauche = []
+    cursor = 0.0
+    for p in poids:
+        x_gauche.append(cursor)
+        cursor += p + gap
+    largeur_totale = cursor - gap
+
+    for i in range(n):
+        bottom = 0.0
+        for s_idx, nom in enumerate(noms_segments):
+            hauteur = segments[nom][i] / totaux_col[i] * 100
+            en_focus = nom in focus_liste
+            ax.bar(x_gauche[i], hauteur, width=poids[i], bottom=bottom,
+                   align="edge", color=couleurs[s_idx], alpha=alphas[s_idx],
+                   edgecolor=T["bg"], linewidth=1.5, zorder=3)
+            if hauteur > 6 and poids[i] > largeur_totale * 0.04:
+                txt_color = T["fond_neutre"] if (focus is None or en_focus) else T["texte_dim"]
+                pct_txt = fmt_segment.format(segments[nom][i] / totaux_col[i] * 100)
+                # Nom du segment affiché uniquement sur la 1re colonne (ou sur
+                # la colonne en focus) — identifie chaque segment une seule
+                # fois sans répéter son nom dans chaque cellule.
+                texte = f"{nom}\n{pct_txt}" if (i == 0 or en_focus) and hauteur > 10 else pct_txt
+                ax.text(x_gauche[i] + poids[i] / 2, bottom + hauteur / 2,
+                        texte,
+                        ha="center", va="center", fontsize=8.5,
+                        fontweight="bold" if en_focus else "normal",
+                        color=txt_color, zorder=4, linespacing=1.3)
+            bottom += hauteur
+
+        label_cat = f"{categories[i]}\n{fmt_poids.format(poids[i])}"
+        ax.text(x_gauche[i] + poids[i] / 2, -3, label_cat,
+                ha="center", va="top", fontsize=9, color=T["texte_dim"])
+
+    ax.set_xlim(0, largeur_totale)
+    ax.set_ylim(-16, 103)
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.grid(visible=False)
+
+    _header(fig, ax, titre, sous_titre, note)
+    return _finalize(fig, skip_layout=external_ax), ax
+

@@ -882,6 +882,35 @@ nuage_annote(
 )
 ```
 
+### `mekko(categories, poids, segments, focus=None, ...)`
+
+Marimekko chart — composition empilée (hauteur, normalisée à 100 %) **×**
+poids de colonne (largeur). Croise deux dimensions en une figure : combien
+pèse chaque catégorie (largeur, ex. taille de marché) et comment elle se
+décompose (hauteur, ex. parts d'acteurs). `focus` met un segment en accent
+sur toutes les colonnes, le reste passe en gris ; sans `focus`, chaque
+segment reçoit une couleur distincte.
+
+```python
+from narratif import mekko
+
+mekko(
+    categories=["Littoral", "Centre", "Ouest"],
+    poids=[420, 260, 180],           # taille du marché par région
+    segments={
+        "Orange": [45, 38, 30],
+        "MTN":    [40, 42, 48],
+        "Camtel": [15, 20, 22],
+    },
+    focus="Orange",
+    titre="Orange domine le Littoral mais recule à l'Ouest",
+)
+```
+
+> Si toutes les catégories ont le même poids, préférez `barres_groupees(
+> empile=True, normalise=True)` — plus simple à lire, sans la largeur
+> variable.
+
 ### `palette_focus(n_total, indices_focus, accent)`
 
 Génère une liste de couleurs — accent pour les indices ciblés, gris pour le reste.  

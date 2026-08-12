@@ -97,6 +97,10 @@ Fonctions publiques :
 - `divergent(categories, valeurs, ...)` — centré zéro, vert/rouge
 - `bullet_chart(kpis, ...)` — KPI vs objectif vs plages de performance
 - `barres_connectees(categories, periodes, valeurs, ...)` — McKinsey : barres chronologiques par entité reliées par une ligne, deltas annotés en bulles colorées
+- `cascade(categories, valeurs, label_total="Total", ...)` — version narrative de `waterfall()` (accent vert/rouge selon le signe)
+- `pente(categories, valeurs_avant, valeurs_apres, top_n=3, ...)` — version narrative de `slope()` (seules les `top_n` variations les plus fortes en accent)
+- `nuage_annote(x, y, labels, tailles=None, focus=None, quadrants=False, ...)` — scatter annoté directement (sans légende), bulles et quadrants optionnels
+- `mekko(categories, poids, segments, focus=None, ...)` — Marimekko chart (2026-08-12) : composition empilée à 100 % (hauteur) × poids de colonne (largeur), `focus` sur un nom de segment applique gris=contexte/accent=signal via `palette_focus()`
 - `palette_focus(n_total, indices_focus, accent)` — liste de couleurs utilitaire
 
 Fonctions d'annotation (superposables sur n'importe quel `ax`) :
