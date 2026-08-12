@@ -270,6 +270,36 @@ heatmap(
 
 ---
 
+### `mekko(categories, poids, segments, ...)`
+
+Marimekko chart — composition empilée (hauteur, normalisée à 100 %) **×**
+poids de colonne (largeur). Croise deux dimensions en une figure : combien
+pèse chaque catégorie (largeur, ex. taille de marché) et comment elle se
+décompose (hauteur, ex. parts d'acteurs). Version neutre, multi-couleur —
+voir [`narratif.mekko()`](#mekkocategories-poids-segments-focusnone-) pour
+la version narrative avec `focus=` (gris=contexte / accent=signal).
+
+```python
+from beau_graphique import mekko
+
+mekko(
+    categories=["Littoral", "Centre", "Ouest"],
+    poids=[420, 260, 180],           # taille du marché par région
+    segments={
+        "Orange": [45, 38, 30],
+        "MTN":    [40, 42, 48],
+        "Camtel": [15, 20, 22],
+    },
+    titre="Parts de marché par région",
+)
+```
+
+> Si toutes les catégories ont le même poids, préférez `barres_groupees(
+> empile=True, normalise=True)` — plus simple à lire, sans la largeur
+> variable.
+
+---
+
 ### `dashboard(configs, ...)`
 
 Grille de graphiques dans une seule figure. Construit les axes directement
@@ -286,7 +316,7 @@ dashboard([
 ```
 
 Types supportés : `ligne`, `barres`, `barres_groupees`, `aire`, `histogramme`,
-`nuage`, `camembert`, `heatmap`, `flux`.
+`nuage`, `camembert`, `heatmap`, `flux`, `mekko`.
 
 ---
 
@@ -882,7 +912,27 @@ nuage_annote(
 )
 ```
 
+`zones_colorees=True` remplit chacun des 4 quadrants d'un rectangle
+translucide au lieu de les suggérer par de simples lignes — utile pour une
+matrice de priorisation métier (risque/opportunité, type BCG) où chaque
+quadrant a un sens propre. `zone_couleurs` personnalise les 4 couleurs
+(même ordre que `quadrant_labels`) pour un vrai code couleur métier.
+
+```python
+nuage_annote(
+    x=[22, 45, 78, 31, 60], y=[3.2, 1.8, 4.5, 2.1, 3.8],
+    labels=["A", "B", "C", "D", "E"],
+    quadrants=True,
+    quadrant_labels=("Risque", "Priorité", "Ignorer", "Watch"),
+    zones_colorees=True,
+    zone_couleurs=("#E63946", "#2DC653", "#A8ABBC", "#F4A261"),
+)
+```
+
 ### `mekko(categories, poids, segments, focus=None, ...)`
+
+Version narrative de [`beau_graphique.mekko()`](#mekkocategories-poids-segments-)
+— même logique, avec `focus`/`accent` (gris=contexte / accent=signal).
 
 Marimekko chart — composition empilée (hauteur, normalisée à 100 %) **×**
 poids de colonne (largeur). Croise deux dimensions en une figure : combien
