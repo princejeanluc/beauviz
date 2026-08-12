@@ -26,6 +26,7 @@ from .beau_graphique import (
     tendances_grille,
     tendances_comparatives,
     flux,
+    mekko,
     enregistrer_couleurs,
     reinitialiser_couleurs,
     colorier_si,

@@ -61,6 +61,7 @@ Fonctions publiques :
 - `nuage(x, y, ...)` — scatter avec colormap, taille, droite de tendance
 - `camembert(labels, valeurs, ...)` — donut ou camembert plein
 - `heatmap(matrice, ...)` — matrice avec annotations et colormap
+- `mekko(categories, poids, segments, ...)` — Marimekko chart (2026-08-12) : composition empilée à 100 % (hauteur) × poids de colonne (largeur), version neutre multi-couleur. Duplique volontairement la géométrie de `narratif.mekko()` (même précédent que `waterfall`/`cascade`, `slope`/`pente` : neutre dans le socle, narratif séparé) — sans ça, un utilisateur de `beau_graphique.py` seul (voir §2, modules indépendants) n'aurait aucun accès au Mekko.
 - `dashboard(configs, ...)` — grille de graphiques, construite via `GridSpec` (voir §6)
 - `flux(liens, noeuds=None, ...)` — diagramme de Sankey (2026-08-10) : rubans de Bézier entre nœuds, colonnes déduites automatiquement (plus long chemin depuis une source, DAG requis), largeur proportionnelle à la valeur. Aucun module dédié — l'API `matplotlib.sankey.Sankey` standard rend des angles droits, incompatible avec l'esthétique du reste de la lib.
 - `dot_plot_comparatif(colonnes, descriptions=None, ...)` — McKinsey : comparaison multi-dimensions entre deux périodes (points creux/pleins + flèche)
@@ -99,7 +100,7 @@ Fonctions publiques :
 - `barres_connectees(categories, periodes, valeurs, ...)` — McKinsey : barres chronologiques par entité reliées par une ligne, deltas annotés en bulles colorées
 - `cascade(categories, valeurs, label_total="Total", ...)` — version narrative de `waterfall()` (accent vert/rouge selon le signe)
 - `pente(categories, valeurs_avant, valeurs_apres, top_n=3, ...)` — version narrative de `slope()` (seules les `top_n` variations les plus fortes en accent)
-- `nuage_annote(x, y, labels, tailles=None, focus=None, quadrants=False, ...)` — scatter annoté directement (sans légende), bulles et quadrants optionnels
+- `nuage_annote(x, y, labels, tailles=None, focus=None, quadrants=False, zones_colorees=False, zone_couleurs=None, ...)` — scatter annoté directement (sans légende), bulles et quadrants optionnels. `zones_colorees` (2026-08-12) remplit les 4 quadrants de rectangles translucides nommés — matrice de priorisation métier type BCG (risque/opportunité) ; ignoré silencieusement si `quadrants=False`
 - `mekko(categories, poids, segments, focus=None, ...)` — Marimekko chart (2026-08-12) : composition empilée à 100 % (hauteur) × poids de colonne (largeur), `focus` sur un nom de segment applique gris=contexte/accent=signal via `palette_focus()`
 - `palette_focus(n_total, indices_focus, accent)` — liste de couleurs utilitaire
 

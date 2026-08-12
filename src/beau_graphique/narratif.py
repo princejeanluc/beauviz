@@ -960,6 +960,7 @@ def nuage_annote(x, y, labels,
                  label_x="", label_y="",
                  accent=ACCENT_DEFAUT,
                  quadrants=False, quadrant_labels=("", "", "", ""),
+                 zones_colorees=False, zone_couleurs=None,
                  figsize=None, format=None, background=None, ax=None):
     """Scatter annoté — chaque point labellisé, les points en focus = accent.
 
@@ -971,6 +972,17 @@ def nuage_annote(x, y, labels,
     focus   : int ou liste d'ints — indices des points à mettre en valeur
     quadrants : True → lignes médianes + libellés de quadrant
     quadrant_labels : (haut-gauche, haut-droite, bas-gauche, bas-droite)
+    zones_colorees : True → remplit chacun des 4 quadrants d'un rectangle
+                    translucide (nécessite ``quadrants=True`` — ignoré
+                    silencieusement sinon). Utile pour des matrices de
+                    priorisation métier (risque/opportunité, type BCG) où
+                    chaque quadrant a un sens propre à faire ressortir
+                    visuellement, pas seulement suggéré par des lignes.
+    zone_couleurs : tuple de 4 couleurs hex, même ordre que
+                    ``quadrant_labels``. ``None`` (défaut) → 4 couleurs de
+                    la palette active, sans sens métier présupposé —
+                    personnalisez pour un vrai code couleur (ex. rouge pour
+                    une zone à risque, vert pour une opportunité).
 
     Exemple
     -------
@@ -983,6 +995,7 @@ def nuage_annote(x, y, labels,
     ...     quadrants=True,
     ...     quadrant_labels=("Faible/Fort", "Fort/Fort",
     ...                       "Faible/Faible", "Fort/Faible"),
+    ...     zones_colorees=True,
     ... )
     """
     import beau_graphique as _bg
@@ -1025,6 +1038,20 @@ def nuage_annote(x, y, labels,
         ax.axhline(ym, color=T["grille"], lw=0.9, ls="--", alpha=0.7, zorder=1)
         x0_, x1_ = ax.get_xlim()
         y0_, y1_ = ax.get_ylim()
+
+        if zones_colorees:
+            zc = zone_couleurs or _bg._palette_pour(["q0", "q1", "q2", "q3"])
+            for (zx0, zx1, zy0, zy1), couleur in zip(
+                [(x0_, xm, ym, y1_), (xm, x1_, ym, y1_),
+                 (x0_, xm, y0_, ym), (xm, x1_, y0_, ym)],
+                zc,
+            ):
+                ax.add_patch(mpatches.Rectangle(
+                    (zx0, zy0), zx1 - zx0, zy1 - zy0,
+                    facecolor=couleur, edgecolor="none",
+                    alpha=0.10, zorder=0.5,
+                ))
+
         ql = quadrant_labels
         for txt, qx, qy in [
             (ql[0], (x0_ + xm)/2, ym + (y1_-ym)*0.85),

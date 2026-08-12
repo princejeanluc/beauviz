@@ -263,7 +263,8 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 - **Nombre de catégories recommandé** : 5 à 25 points étiquetés.
 - **Données requises** : `x`, `y`, `labels` (listes alignées), `tailles` optionnel.
 - **Exemple minimal** : `nuage_annote(x=[22,45], y=[3.2,1.8], labels=["A","B"])`
-- **Erreurs courantes** : trop de points étiquetés qui se chevauchent ; `quadrants=True` sans `quadrant_labels` explicites (les cadrans restent muets).
+- **Erreurs courantes** : trop de points étiquetés qui se chevauchent ; `quadrants=True` sans `quadrant_labels` explicites (les cadrans restent muets) ; `zones_colorees=True` sans `quadrants=True` (ignoré silencieusement, aucune zone ne s'affiche).
+- **Astuce matrice de priorisation** : `quadrants=True, zones_colorees=True, zone_couleurs=(...)` transforme le nuage en matrice de décision type BCG — 4 zones translucides nommées et colorées selon leur sens métier (ex. rouge = risque, vert = priorité).
 - **Voir aussi** : `nuage()`, `bulle_4d()`.
 
 ### `unit_chart()`
@@ -281,13 +282,14 @@ exemple minimal, les erreurs courantes, et les fonctions proches.
 ### `mekko()`
 
 - **En une phrase** : Marimekko chart — largeur de colonne = poids de la catégorie, hauteur empilée = composition normalisée à 100 %, deux dimensions croisées en une figure.
+- **Deux versions** : `beau_graphique.mekko()` — neutre, chaque segment sa couleur (utilisable sans `narratif.py`). `narratif.mekko(..., focus=...)` — un segment en accent, le reste en gris.
 - **Utiliser quand** : la composition de chaque catégorie compte (parts d'acteurs, mix produit) ET l'importance relative des catégories elles-mêmes compte aussi (taille de marché, volume) — les deux perdues si on les sépare en deux graphiques.
 - **Ne pas utiliser quand** : toutes les catégories ont le même poids (la largeur variable ajoute de la complexité de lecture pour rien — préférez `barres_groupees(empile=True, normalise=True)`).
 - **Nombre de variables** : 1 poids par catégorie + N segments empilés par catégorie.
 - **Nombre de catégories recommandé** : 3 à 8 colonnes, 2 à 5 segments.
 - **Données requises** : `categories`, `poids` (largeur, >0), `segments` (dict `{"nom": [valeurs par catégorie]}`).
 - **Exemple minimal** : `mekko(["A","B"], [100,200], {"X":[30,10],"Y":[70,90]})`
-- **Erreurs courantes** : colonnes trop nombreuses ou trop étroites qui perdent leurs étiquettes de segment ; oublier `focus` alors qu'un seul acteur/segment est le vrai sujet du message.
+- **Erreurs courantes** : colonnes trop nombreuses ou trop étroites qui perdent leurs étiquettes de segment ; oublier `focus` (version `narratif`) alors qu'un seul acteur/segment est le vrai sujet du message.
 - **Voir aussi** : `unit_chart()`, `barres_groupees(empile=True)`.
 
 ### `barres_connectees()`
