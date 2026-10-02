@@ -225,6 +225,20 @@ def _palette_pour(noms: list) -> list:
     ]
 
 
+def _dernier_indice_valide(vals):
+    """Index du dernier élément non-NaN/non-None de ``vals``, ou None si la
+    série est entièrement invalide. Utile pour annoter la fin d'une série
+    plus courte que les autres (ex: cohorte récente paddée en NaN)."""
+    for i in range(len(vals) - 1, -1, -1):
+        v = vals[i]
+        if v is None:
+            continue
+        if isinstance(v, float) and np.isnan(v):
+            continue
+        return i
+    return None
+
+
 def enregistrer_couleurs(mapping: dict, fusionner: bool = True) -> None:
     """
     Associe des couleurs hex à des entités nommées (villes, produits, séries…)
@@ -423,6 +437,7 @@ def _formater_axe_dates(ax, valeurs, freq=None):
 
 def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
           note="", markers=True, fill_last=False, vmin=None, vmax=None,
+          fmt_annotation=None,
           figsize=None, ax=None, format=None, background=None, **_extra):
     """
     Graphique en lignes multi-séries.
@@ -433,6 +448,12 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
     y_series   : dict  {"Nom série": [valeurs], ...}
     markers    : Afficher les marqueurs ronds sur chaque point
     fill_last  : Remplir la zone sous la première série (effet aire légère)
+    fmt_annotation : format new-style appliqué à l'annotation de fin de série
+                 (ex: ".0%", ".1f"). None (défaut) → affichage brut, comme
+                 avant. Chaque série est annotée à son dernier point *valide*
+                 (pas forcément vals[-1]) — utile quand des séries plus
+                 courtes (ex: cohorte récente) sont paddées en NaN pour
+                 partager le même axe x que les séries plus longues.
     **_extra   : clés ignorées — permet d'appeler ligne(**depuis_df(...)) même
                  si le dict contient des clés destinées à d'autres fonctions
                  (categories, valeurs, groupes)
@@ -462,11 +483,16 @@ def ligne(x, y_series: dict, titre="", sous_titre="", xlabel="", ylabel="",
         if fill_last and i == 0:
             ax.fill_between(x, vals, alpha=0.12, color=color)
 
-    # Annotation valeur finale
+    # Annotation valeur finale — au dernier point valide, pas forcément vals[-1]
     for i, (nom, vals) in enumerate(y_series.items()):
         color = couleurs_series[i]
-        ax.annotate(f"{vals[-1]}",
-                    xy=(x[-1], vals[-1]),
+        idx = _dernier_indice_valide(vals)
+        if idx is None:
+            continue
+        val_fin = vals[idx]
+        texte = _fmt_builtin(val_fin, fmt_annotation) if fmt_annotation else f"{val_fin}"
+        ax.annotate(texte,
+                    xy=(x[idx], val_fin),
                     xytext=(6, 0), textcoords="offset points",
                     fontsize=9.5, color=color, fontweight="bold", va="center")
 
@@ -879,18 +905,25 @@ def camembert(labels, valeurs, titre="", sous_titre="", note="",
 
 def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
             titre="", sous_titre="", note="",
-            cmap="RdYlGn", annot=True, fmt=".2f", figsize=None, ax=None, format=None,
+            cmap="RdYlGn", annot=True, fmt=".2f", vmin=None, vmax=None,
+            figsize=None, ax=None, format=None,
             background=None):
     """
     Heatmap générique (corrélation, pivot, confusion matrix…).
 
     Parameters
     ----------
-    matrice         : Array 2D numpy ou liste de listes
+    matrice         : Array 2D numpy ou liste de listes — les NaN sont
+                      acceptés (cellule laissée vide, ex: matrice triangulaire)
     labels_lignes   : Étiquettes des lignes
     labels_colonnes : Étiquettes des colonnes
     annot           : Afficher les valeurs dans les cellules
     fmt             : Format des valeurs (ex: ".2f", ".0f", "d")
+    vmin, vmax      : Bornes de l'échelle de couleur. Défaut : min/max de la
+                      matrice en ignorant les NaN. À fixer explicitement
+                      quand une colonne domine naturellement l'échelle
+                      (ex: M0 = 100 % dans un triangle de rétention) et
+                      écraserait sinon les écarts entre les autres colonnes.
 
     Exemple
     -------
@@ -898,14 +931,15 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
     >>> mat = np.corrcoef(np.random.randn(5, 50))
     >>> heatmap(mat, titre="Matrice de corrélation")
     """
-    matrice = np.array(matrice)
+    matrice = np.array(matrice, dtype=float)
     n, m = matrice.shape
     ajuster_layout = ax is None
     figsize = _resoudre_figsize(figsize, format)
     fig, ax = _new_fig(figsize or (max(6, m * 0.9), max(5, n * 0.75)), ax=ax, background=background)
 
-    im = ax.imshow(matrice, cmap=cmap, aspect="auto",
-                   vmin=matrice.min(), vmax=matrice.max())
+    vmin = vmin if vmin is not None else np.nanmin(matrice)
+    vmax = vmax if vmax is not None else np.nanmax(matrice)
+    im = ax.imshow(matrice, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.ax.tick_params(labelsize=9)
@@ -918,13 +952,156 @@ def heatmap(matrice, labels_lignes=None, labels_colonnes=None,
         ax.set_xticklabels(labels_colonnes, rotation=40, ha="right", fontsize=10)
 
     if annot:
-        thresh = (matrice.max() + matrice.min()) / 2
+        # Contraste calculé sur la couleur réellement rendue par la cellule
+        # (cmap + normalisation), pas sur un seuil brut appliqué à la donnée —
+        # ça reste correct pour une palette séquentielle (ex: "Blues") où le
+        # texte foncé/clair ne suit pas le même sens que pour une palette
+        # divergente comme le défaut "RdYlGn".
         for i in range(n):
             for j in range(m):
                 val = matrice[i, j]
-                color = _T["bg"] if val < thresh else _T["texte"]
+                if np.isnan(val):
+                    continue
+                couleur_cellule = im.cmap(im.norm(val))
+                color = THEMES["light"]["texte"] if _lum(couleur_cellule) > 0.55 else THEMES["light"]["bg"]
                 ax.text(j, i, _fmt_builtin(val, fmt), ha="center", va="center",
                         fontsize=9, color=color, fontweight="bold")
+
+    ax.set_frame_on(False)
+    ax.tick_params(length=0)
+
+    if titre:
+        ax.set_title(titre, fontsize=15, fontweight="bold",
+                     color=_T["texte"], pad=14, loc="left")
+    if sous_titre:
+        ax.annotate(sous_titre, xy=(0, 1.02), xycoords="axes fraction",
+                    fontsize=10, color=_T["texte_dim"])
+    if note:
+        fig.text(0.01, -0.03, note, fontsize=8.5, color=_T["texte_dim"],
+                 style="italic", transform=ax.transAxes)
+
+    if ajuster_layout:
+        fig.tight_layout()
+    return fig, ax
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cohorte — triangle de rétention (heatmap spécialisée cohorte × ancienneté)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cohorte(matrice, labels_cohortes=None, labels_periodes=None, tailles=None,
+            titre="", sous_titre="", note="",
+            cmap="Blues", fmt="{:.0f}%", afficher_moyenne=True,
+            vmin=0, vmax=100, figsize=None, format=None, background=None, ax=None):
+    """
+    Triangle de rétention — heatmap spécialisée cohorte × ancienneté.
+
+    Chaque ligne est une cohorte (ex: mois d'acquisition), chaque colonne une
+    ancienneté (M0, M1, M2…). La matrice est naturellement triangulaire : les
+    cohortes récentes n'ont pas encore atteint les anciennetés élevées — ces
+    cellules doivent valoir NaN. Elles restent transparentes, sans casser
+    l'échelle de couleur ni afficher "nan" (contrairement à heatmap() utilisée
+    brute sur ce type de donnée — voir aussi le défaut vmin/vmax=0/100 qui
+    évite que la colonne M0, presque toujours à 100 %, écrase l'échelle).
+
+    Parameters
+    ----------
+    matrice          : array 2D (n_cohortes × n_périodes) — NaN pour les
+                       anciennetés non encore atteintes.
+    labels_cohortes  : étiquette de chaque ligne (ex: "2024-01", "2024-02"…)
+    labels_periodes  : étiquette de chaque colonne (défaut : "M0", "M1"…)
+    tailles          : effectif de chaque cohorte — affiché en marge droite
+                       si fourni, pour lire le poids de chaque ligne
+    cmap             : séquentielle par défaut ("Blues") — contrairement au
+                       défaut de heatmap() (RdYlGn, divergent), qui n'a pas
+                       de sens pour une rétention qui ne fait que décroître
+    fmt              : format new-style appliqué à chaque valeur (ex: "{:.0f}%")
+    afficher_moyenne : ajoute une ligne "Moyenne" sous le triangle — pondérée
+                       par `tailles` si fourni, sinon moyenne simple par
+                       colonne (une cohorte qui n'a pas encore atteint une
+                       ancienneté ne compte pas dans la moyenne de cette
+                       colonne)
+    vmin, vmax       : bornes de couleur, 0/100 par défaut (passez None pour
+                       revenir au comportement auto de heatmap(), basé sur le
+                       min/max réel de la matrice)
+
+    Returns
+    -------
+    (fig, ax)
+
+    Exemple
+    -------
+    >>> import numpy as np
+    >>> mat = np.array([
+    ...     [100, 45, 30, 22],
+    ...     [100, 48, 33, np.nan],
+    ...     [100, 51, np.nan, np.nan],
+    ... ])
+    >>> cohorte(mat, labels_cohortes=["2024-01", "2024-02", "2024-03"],
+    ...         tailles=[1200, 980, 1340],
+    ...         titre="La rétention M1 s'améliore depuis janvier")
+    """
+    matrice = np.array(matrice, dtype=float)
+    n, m = matrice.shape
+    labels_periodes = labels_periodes or [f"M{j}" for j in range(m)]
+    labels_lignes = list(labels_cohortes) if labels_cohortes else [str(i) for i in range(n)]
+
+    ajuster_layout = ax is None
+    figsize = _resoudre_figsize(figsize, format)
+    fig, ax = _new_fig(figsize or (max(6, m * 0.9 + 1.0), max(5, (n + 1) * 0.75)),
+                       ax=ax, background=background)
+
+    if afficher_moyenne:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            if tailles is not None:
+                poids = np.array(tailles, dtype=float)[:, None]
+                masque = ~np.isnan(matrice)
+                moyenne = np.nansum(matrice * poids, axis=0) / np.sum(poids * masque, axis=0)
+            else:
+                moyenne = np.nanmean(matrice, axis=0)
+        matrice_affichee = np.vstack([matrice, moyenne])
+        labels_lignes = labels_lignes + ["Moyenne"]
+    else:
+        matrice_affichee = matrice
+
+    vmin = vmin if vmin is not None else np.nanmin(matrice_affichee)
+    vmax = vmax if vmax is not None else np.nanmax(matrice_affichee)
+    im = ax.imshow(matrice_affichee, cmap=cmap, aspect="auto", vmin=vmin, vmax=vmax)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.ax.tick_params(labelsize=9)
+
+    ax.set_xticks(range(m))
+    ax.set_xticklabels(labels_periodes, fontsize=10)
+    ax.set_yticks(range(len(labels_lignes)))
+    ax.set_yticklabels(labels_lignes, fontsize=10)
+    if afficher_moyenne:
+        ax.get_yticklabels()[-1].set_fontweight("bold")
+        ax.axhline(n - 0.5, color=_T["bg"], linewidth=3)
+
+    for i in range(matrice_affichee.shape[0]):
+        for j in range(m):
+            val = matrice_affichee[i, j]
+            if np.isnan(val):
+                continue
+            couleur_cellule = im.cmap(im.norm(val))
+            color = THEMES["light"]["texte"] if _lum(couleur_cellule) > 0.55 else THEMES["light"]["bg"]
+            ax.text(j, i, fmt.format(val), ha="center", va="center",
+                    fontsize=9, color=color, fontweight="bold")
+
+    if tailles is not None:
+        ax.set_xlim(-0.5, m + 0.9)
+        # y en fraction d'axe (pas en coordonnées data) pour rester au-dessus
+        # du sous-titre quel que soit sa longueur — x reste en données pour
+        # s'aligner avec la colonne de marge.
+        ax.annotate("Effectif", xy=(m + 0.4, 1.08), xycoords=("data", "axes fraction"),
+                    fontsize=9, color=_T["texte_dim"], ha="center", annotation_clip=False)
+        for i, taille in enumerate(tailles):
+            ax.text(m + 0.4, i, f"{taille:,.0f}", ha="center", va="center",
+                    fontsize=9, color=_T["texte_dim"])
+        if afficher_moyenne:
+            ax.text(m + 0.4, n, f"{sum(tailles):,.0f}", ha="center", va="center",
+                    fontsize=9, color=_T["texte_dim"], fontweight="bold")
 
     ax.set_frame_on(False)
     ax.tick_params(length=0)
@@ -1931,7 +2108,7 @@ def flux(liens, noeuds=None,
 from beau_graphique_mckinsey import (
     dot_plot_comparatif, bulle_4d, unit_chart,
     tendances_grille, tendances_comparatives,
-    bump, radar, ridgeline,
+    bump, radar, ridgeline, _lum,
 )
 from beau_graphique_layout import slide, layout_rapport
 

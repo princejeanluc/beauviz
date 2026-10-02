@@ -259,18 +259,25 @@ def ligne_focus(x, series: dict, focus_serie,
                 marker=("o" if markers else None),
                 mfc=T["bg"], mec=T["serie_dim"], mew=1.2, ms=4, zorder=2)
         if annoter_fin:
-            ax.annotate(nom, xy=(x_arr[-1], vals[-1]),
-                        xytext=(5, 0), textcoords="offset points",
-                        fontsize=8.5, color=T["texte_dim"], va="center")
+            # Dernier point *valide* — une série plus courte (ex: cohorte
+            # récente paddée en NaN pour partager l'axe x) ne doit pas
+            # s'annoter "nan" à x_arr[-1].
+            idx = _bg._dernier_indice_valide(vals)
+            if idx is not None:
+                ax.annotate(nom, xy=(x_arr[idx], vals[idx]),
+                            xytext=(5, 0), textcoords="offset points",
+                            fontsize=8.5, color=T["texte_dim"], va="center")
 
     vals_focus = series[focus_serie]
     ax.plot(x_arr, vals_focus, color=accent, lw=3.0, zorder=4,
             marker=("o" if markers else None),
             mfc=T["bg"], mec=accent, mew=2.2, ms=7)
     if annoter_fin:
-        ax.annotate(focus_serie, xy=(x_arr[-1], vals_focus[-1]),
-                    xytext=(7, 0), textcoords="offset points",
-                    fontsize=10.5, color=accent, fontweight="bold", va="center")
+        idx_focus = _bg._dernier_indice_valide(vals_focus)
+        if idx_focus is not None:
+            ax.annotate(focus_serie, xy=(x_arr[idx_focus], vals_focus[idx_focus]),
+                        xytext=(7, 0), textcoords="offset points",
+                        fontsize=10.5, color=accent, fontweight="bold", va="center")
 
     if x_labels:
         ax.set_xticks(x_arr)

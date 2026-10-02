@@ -8,6 +8,7 @@ from .beau_graphique import (
     nuage,
     camembert,
     heatmap,
+    cohorte,
     dot_plot_comparatif,
     bulle_4d,
     unit_chart,
