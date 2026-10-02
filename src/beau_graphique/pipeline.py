@@ -19,6 +19,8 @@ Fonctions publiques
     inspecter(df)                           → rapport visuel sur les données
     nettoyer(df, ...)                       → DataFrame prêt à l'emploi
     resoudre(x, y, df, ...)                → résout x/y quelle que soit la source
+    matrice_cohorte(df, id_client, date_evenement, ...)
+                                            → dict prêt pour cohorte()
 
 Intégration transparente
 ------------------------
@@ -402,6 +404,151 @@ def depuis_df(
         "y_series": {y: y_vals},
         "valeurs": y_vals,
         "groupes": {y: y_vals},
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# matrice_cohorte — construit la matrice cohorte × ancienneté pour cohorte()
+# ══════════════════════════════════════════════════════════════════════════════
+
+def matrice_cohorte(
+    df,
+    id_client: str,
+    date_evenement: str,
+    date_acquisition: str = None,
+    freq: str = "M",
+    valeur: str = None,
+    agg: str = "sum",
+    normaliser: bool = True,
+) -> dict:
+    """
+    Transforme un journal d'événements (une ligne par événement) en matrice
+    cohorte × ancienneté prête pour ``cohorte()``.
+
+    Chaque client est rattaché à une cohorte (sa période d'acquisition), et
+    chaque événement est replacé à son ancienneté (nombre de périodes depuis
+    l'acquisition). Les anciennetés non encore atteintes par une cohorte
+    (ex: un client acquis le mois dernier n'a pas encore de M3) restent NaN
+    — c'est précisément ce que ``cohorte()`` attend pour dessiner le triangle.
+    Les anciennetés atteintes mais sans aucune activité valent 0 (vraie
+    rétention nulle), pas NaN.
+
+    Parameters
+    ----------
+    df               : DataFrame pandas ou polars — un événement par ligne
+    id_client        : colonne identifiant le client
+    date_evenement   : colonne date de l'événement (activité, achat…)
+    date_acquisition : colonne date d'acquisition du client. Défaut None →
+                       calculée comme la première date d'événement de chaque
+                       client (hypothèse : acquisition = premier événement
+                       observé dans le journal).
+    freq             : "D" | "W" | "M" | "Q" | "Y" — granularité de l'ancienneté
+    valeur           : colonne à agréger (ex: "montant") pour une rétention
+                       pondérée (LTV, revenu…). Défaut None → compte les
+                       clients actifs distincts (rétention classique).
+    agg              : agrégation appliquée à `valeur` quand fourni :
+                       "sum" | "mean" | "max" | "min" (ignoré si valeur=None,
+                       qui compte toujours les clients distincts)
+    normaliser       : True (défaut) → chaque ligne en % de sa colonne M0.
+                       False → valeurs brutes (effectifs ou somme de `valeur`).
+
+    Returns
+    -------
+    dict avec les clés :
+      "matrice"         → array 2D (n_cohortes × n_périodes), prêt pour
+                           cohorte(matrice=...)
+      "labels_cohortes" → liste des cohortes (période d'acquisition, triées)
+      "tailles"         → effectif de clients distincts de chaque cohorte
+
+    Exemple
+    -------
+    >>> res = matrice_cohorte(journal, id_client="client_id",
+    ...                        date_evenement="date", freq="M")
+    >>> cohorte(**res, titre="Rétention mensuelle par cohorte d'acquisition")
+    """
+    if not _is_df(df):
+        raise TypeError(
+            f"matrice_cohorte() attend un DataFrame pandas/polars, reçu : {type(df).__name__}"
+        )
+    if not _PANDAS:
+        raise ImportError("matrice_cohorte() nécessite pandas.")
+
+    df_p = _to_pandas(df).copy()
+    for col in [c for c in (id_client, date_evenement, date_acquisition) if c]:
+        if col not in df_p.columns:
+            raise KeyError(
+                f"Colonne '{col}' introuvable.\n"
+                f"Colonnes disponibles : {list(df_p.columns)}"
+            )
+
+    df_p[date_evenement] = pd.to_datetime(df_p[date_evenement])
+    if date_acquisition is None:
+        acquisition = df_p.groupby(id_client)[date_evenement].transform("min")
+    else:
+        acquisition = pd.to_datetime(df_p[date_acquisition])
+
+    cohorte_evt = acquisition.dt.to_period(freq)
+    periode_evt = df_p[date_evenement].dt.to_period(freq)
+    anciennete = (periode_evt.apply(lambda p: p.ordinal)
+                  - cohorte_evt.apply(lambda p: p.ordinal))
+
+    n_avant = len(df_p)
+    valides = anciennete >= 0
+    if (~valides).sum() > 0:
+        warnings.warn(
+            f"⚠ {(~valides).sum()} événement(s) antérieur(s) à la date "
+            "d'acquisition du client — ignorés.", stacklevel=2
+        )
+    df_p = df_p[valides].copy()
+    df_p["_cohorte"] = cohorte_evt[valides]
+    df_p["_anciennete"] = anciennete[valides]
+
+    cohortes = sorted(df_p["_cohorte"].unique(), key=lambda p: p.ordinal)
+    if not cohortes:
+        raise ValueError("matrice_cohorte() : aucune ligne valide après nettoyage.")
+
+    taille_par_cohorte = (
+        df_p.drop_duplicates(subset=id_client)
+            .groupby("_cohorte")[id_client].nunique()
+    )
+    tailles = [int(taille_par_cohorte.get(c, 0)) for c in cohortes]
+
+    if valeur is None:
+        pivot = df_p.pivot_table(index="_cohorte", columns="_anciennete",
+                                  values=id_client, aggfunc=pd.Series.nunique)
+    else:
+        pivot = df_p.pivot_table(index="_cohorte", columns="_anciennete",
+                                  values=valeur, aggfunc=agg)
+
+    # Référence temporelle globale = dernière période observée dans le journal
+    # (pas le dernier événement de CHAQUE cohorte : un client qui a churné à
+    # l'ancienneté 2 doit quand même avoir des 0 aux anciennetés 3, 4… déjà
+    # atteignables aujourd'hui, pas des NaN).
+    ref_ordinal = int(df_p[date_evenement].dt.to_period(freq).apply(lambda p: p.ordinal).max())
+    ordinal_min = cohortes[0].ordinal
+    max_age = ref_ordinal - ordinal_min
+    pivot = pivot.reindex(index=cohortes, columns=range(0, max_age + 1))
+
+    matrice = pivot.to_numpy(dtype=float)
+    # Anciennetés déjà atteignables (âge <= référence - date d'acquisition
+    # de la cohorte) mais sans activité → 0, pas NaN ; au-delà → NaN (pas
+    # encore atteint par cette cohorte).
+    for i, c in enumerate(cohortes):
+        age_max_i = ref_ordinal - c.ordinal
+        atteignable = np.arange(matrice.shape[1]) <= age_max_i
+        ligne = matrice[i]
+        ligne[atteignable & np.isnan(ligne)] = 0.0
+        matrice[i] = ligne
+
+    if normaliser:
+        base = matrice[:, [0]]
+        with np.errstate(invalid="ignore", divide="ignore"):
+            matrice = matrice / base * 100
+
+    return {
+        "matrice": matrice,
+        "labels_cohortes": [str(c) for c in cohortes],
+        "tailles": tailles,
     }
 
 
